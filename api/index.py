@@ -46,10 +46,35 @@ async def layer1_test(ingredient: str = "Ascorbic Acid"):
                 "region": "Global"
             }
         }
-        result = run_requirement_layer(input_data)
-        return result
+        from dotenv import load_dotenv, find_dotenv
+        # Ensure we specifically look for .env.local for local hybrid Next.js/FastAPI development
+        load_dotenv(find_dotenv('.env.local'))
+        load_dotenv() # Fallback to standard .env
+
+        # Execute manually to completely bypass the CLI runner's sys.exit(1) which violently destroys FastAPI workers
+        from src.requirement_layer.input_processor import InputProcessor
+        from src.requirement_layer.output_formatter import OutputFormatter
+        from src.requirement_layer.requirement_engine import RequirementEngine
+        
+        processor = InputProcessor()
+        payload = processor.load_from_dict(input_data)
+        
+        # Safe execution wrapper for the agent engine
+        try:
+            engine = RequirementEngine(model="gemini-3-flash-preview")
+        except OSError as e:
+            return {"error": "API Key Missing", "detail": "The Python Backend could not find your GEMINI_API_KEY. Ensure you replaced the placeholder in .env.local with a real key! Error: " + str(e)}
+            
+        requirements = engine.generate(
+            ingredient=payload.ingredient,
+            context=payload.context,
+            ingredient_id=payload.ingredient.ingredient_id,
+        )
+        
+        return OutputFormatter().to_dict(OutputFormatter().build(payload.ingredient.ingredient_id, requirements, "Generated successfully"))
+        
     except BaseException as e:
-        return {"error": "Layer 1 Engine Failure", "detail": str(e), "note": "If you see a SystemExit, Vercel is missing your GEMINI_API_KEY environment variable."}
+        return {"error": "Server Caught Fatal Error", "detail": str(e)}
 
 @app.get("/api/layer2")
 async def layer2_test(ingredient: str = "Ascorbic Acid"):
@@ -67,6 +92,10 @@ async def layer2_test(ingredient: str = "Ascorbic Acid"):
             }
         }
         
+        from dotenv import load_dotenv, find_dotenv
+        load_dotenv(find_dotenv('.env.local'))
+        load_dotenv()
+
         # Load environment config
         config = load_config()
         # Fallback to mock search if APIs aren't fully configured in the environment
