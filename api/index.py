@@ -153,7 +153,10 @@ async def health_keys():
                 from google import genai
                 # Initialize without causing a crash if missing 
                 client = genai.Client(api_key=gemini_key)
-                client.models.get(model='gemini-2.5-flash')
+                
+                # Omit models.get() because making external outbound HTTP calls inside a diagnostic endpoint 
+                # can trigger aggressive 10s AWS Serverless timeouts on Vercel Hobby tier, resulting in 500 crashes.
+                
                 gemini_status = "Connected"
                 gemini_detail = "Successfully authenticated with Google AI Studio."
                 gemini_pass = True
