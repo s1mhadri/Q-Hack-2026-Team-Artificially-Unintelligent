@@ -13,11 +13,11 @@ export default function SettingsPage() {
       const res = await fetch("/api/health/keys");
       
       let data;
+      const textPayload = await res.text();
       try {
-        data = await res.json();
+        data = JSON.parse(textPayload);
       } catch (parseError) {
-        // If Vercel or local Proxy throws a 504/500 HTML page due to dead backend or timeouts, fetch the raw text
-        const textPayload = await res.text();
+        // If Vercel or local Proxy throws a 504/500 HTML page due to dead backend or timeouts
         throw new Error(`Server returned a non-JSON framework error (Status: ${res.status}). Body: ${textPayload.substring(0, 500)}`);
       }
       
