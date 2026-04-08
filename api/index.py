@@ -61,7 +61,7 @@ async def layer1_test(ingredient: str = "Ascorbic Acid"):
         
         # Safe execution wrapper for the agent engine
         try:
-            engine = RequirementEngine(model="gemini-3-flash-preview")
+            engine = RequirementEngine(model="gemini-2.5-flash")
         except OSError as e:
             return {"error": "API Key Missing", "detail": "The Python Backend could not find your GEMINI_API_KEY. Ensure you replaced the placeholder in .env.local with a real key! Error: " + str(e)}
             
@@ -152,7 +152,7 @@ async def health_keys():
             client = genai.Client(api_key=gemini_key)
             # Lightweight verification: generate one single word
             client.models.generate_content(
-                model='gemini-1.5-flash',
+                model='gemini-2.5-flash',
                 contents="test connection"
             )
             gemini_status = "Connected"
