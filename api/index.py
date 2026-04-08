@@ -133,45 +133,46 @@ async def layer4_test():
 
 @app.get("/api/health/keys")
 async def health_keys():
-    import os
-    from dotenv import load_dotenv, find_dotenv
-    load_dotenv(find_dotenv('.env.local'))
-    load_dotenv()
-    
-    gemini_key = os.environ.get("GEMINI_API_KEY")
-    google_key = os.environ.get("GOOGLE_API_KEY")
-    google_cse = os.environ.get("GOOGLE_CSE_ID")
-    
-    gemini_status = "Missing"
-    gemini_detail = "No key injected or placeholder still in use."
-    gemini_pass = False
-    
-    if gemini_key and not gemini_key.startswith("paste_your"):
-        try:
-            from google import genai
-            # Initialize without causing a crash if missing 
-            client = genai.Client(api_key=gemini_key)
-            # Lightweight verification: fetch metadata instantly instead of generating text (avoids 15s Next.js Proxy/Vercel Serverless Timeouts)
-            client.models.get(
-                model='gemini-2.5-flash'
-            )
-            gemini_status = "Connected"
-            gemini_detail = "Successfully authenticated with Google AI Studio."
-            gemini_pass = True
-        except Exception as e:
-            gemini_status = "Auth Error"
-            gemini_detail = f"Google rejected your key: {str(e)}"
-            
-    return {
-        "gemini": {
-            "key_present": bool(gemini_key and not gemini_key.startswith("paste_your")),
-            "status": gemini_status,
-            "detail": gemini_detail,
-            "pass": gemini_pass
-        },
-        "google_search": {
-            "api_key_present": bool(google_key and not google_key.startswith("paste_your")),
-            "cse_id_present": bool(google_cse and not google_cse.startswith("paste_your")),
-            "detail": "Search APIs correctly bound to local environment context."
+    import traceback
+    try:
+        import os
+        from dotenv import load_dotenv, find_dotenv
+        load_dotenv(find_dotenv('.env.local'))
+        load_dotenv()
+        
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        google_key = os.environ.get("GOOGLE_API_KEY")
+        google_cse = os.environ.get("GOOGLE_CSE_ID")
+        
+        gemini_status = "Missing"
+        gemini_detail = "No key injected or placeholder still in use."
+        gemini_pass = False
+        
+        if gemini_key and not gemini_key.startswith("paste_your"):
+            try:
+                from google import genai
+                # Initialize without causing a crash if missing 
+                client = genai.Client(api_key=gemini_key)
+                client.models.get(model='gemini-2.5-flash')
+                gemini_status = "Connected"
+                gemini_detail = "Successfully authenticated with Google AI Studio."
+                gemini_pass = True
+            except Exception as e:
+                gemini_status = "Auth Error"
+                gemini_detail = f"Google rejected your key: {str(e)}"
+                
+        return {
+            "gemini": {
+                "key_present": bool(gemini_key and not gemini_key.startswith("paste_your")),
+                "status": gemini_status,
+                "detail": gemini_detail,
+                "pass": gemini_pass
+            },
+            "google_search": {
+                "api_key_present": bool(google_key and not google_key.startswith("paste_your")),
+                "cse_id_present": bool(google_cse and not google_cse.startswith("paste_your")),
+                "detail": "Search APIs correctly bound to local environment context."
+            }
         }
-    }
+    except Exception as e:
+        return {"error": True, "detail": f"Server diagnostics gracefully caught a runtime exception: {str(e)}\\n{traceback.format_exc()}"}
