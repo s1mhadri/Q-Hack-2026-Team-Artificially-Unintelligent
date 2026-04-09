@@ -138,7 +138,7 @@ def _generate_requirements(ingredient: IngredientRef) -> list[RequirementInput]:
                     },
                     "context": {"product_category": "food ingredient"},
                 },
-                model="gemini-2.5-flash",
+                model="gemini-3-flash",
             )
         finally:
             sys.stdout = _old_stdout
@@ -319,7 +319,7 @@ def _get_competitors(ingredient: IngredientRef, max_candidates: int = 10) -> lis
 
         cl_config = CompetitorConfig(
             gemini_api_key=gemini_key,
-            gemini_model="gemini-2.5-flash",
+            gemini_model="gemini-3-flash",
             max_candidates=max_candidates,
             ranking_enabled=True,
             google_api_key=None,
@@ -885,7 +885,7 @@ def main():
 
     from dataclasses import asdict
     d = asdict(config)
-    d["gemini_model"] = "gemini-2.5-flash"
+    d["gemini_model"] = "gemini-3-flash"
     d["search_delay"] = 1.5
     d["search_results_per_query"] = 4
     d["max_evidence_per_supplier"] = 8
@@ -1008,11 +1008,57 @@ def main():
             for s in all_suppliers
         }
 
+        # Filter requirements to only fields where at least one supplier has data
+        available_fields: set[str] = set()
+        for sa in output.supplier_assessments:
+            for attr in sa.extracted_attributes:
+                available_fields.add(attr.field_name)
+
+        verifiable_reqs = [r for r in requirements if r.field_name in available_fields]
+        dropped_reqs = len(requirements) - len(verifiable_reqs)
+        if dropped_reqs:
+            console.print(
+                f"  [dim]Filtered to {len(verifiable_reqs)} verifiable requirements "
+                f"(dropped {dropped_reqs} with no evidence across any supplier)[/]"
+            )
+
+        # Re-run verification with filtered requirements for each supplier
+        from quality_verification_layer.id_generator import QualityIdGenerator
+        from quality_verification_layer.verification import verify_requirements
+        from quality_verification_layer.aggregation import (
+            compute_coverage_summary, compute_overall_status, compute_overall_confidence,
+        )
+
+        for sa in output.supplier_assessments:
+            if not sa.extracted_attributes:
+                continue
+            id_gen = QualityIdGenerator(sa.supplier_id)
+            sa.verification_results = verify_requirements(
+                sa.extracted_attributes, verifiable_reqs, id_gen,
+            )
+            sa.coverage_summary = compute_coverage_summary(
+                sa.verification_results, verifiable_reqs,
+            )
+            sa.overall_status = compute_overall_status(
+                sa.coverage_summary, sa.evidence_items,
+            )
+            sa.overall_evidence_confidence = compute_overall_confidence(
+                sa.evidence_items, sa.extracted_attributes,
+            )
+            # Update notes
+            missing = [
+                vr.field_name for vr in sa.verification_results
+                if (vr.status if isinstance(vr.status, str) else vr.status.value) == "unknown"
+            ]
+            sa.notes = [n for n in sa.notes if not n.startswith("No values found")]
+            if missing:
+                sa.notes.append(f"No values found for: {', '.join(missing)}")
+
         # Show Layer 3 results (all suppliers)
-        show_layer3_results(output, requirements, names=supplier_names)
+        show_layer3_results(output, verifiable_reqs, names=supplier_names)
 
         # Show final ranking
-        ranked = _rank_suppliers(output.supplier_assessments, requirements)
+        ranked = _rank_suppliers(output.supplier_assessments, verifiable_reqs)
         show_final_ranking(ranked, ingredient.canonical_name, names=supplier_names)
 
         if elapsed:
