@@ -1,35 +1,25 @@
 import traceback
+import asyncio
+import sys
+import json
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-try:
-    import asyncio
-    import sys
-    import json
-    from pathlib import Path
+# Add the project root to sys path so we can import src and competitor_layer
+base_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(base_dir))
+sys.path.insert(0, str(base_dir / "src" / "competitor_layer"))
 
-    # Add the project root to sys path so we can import src and competitor_layer
-    base_dir = Path(__file__).parent.parent
-    sys.path.insert(0, str(base_dir))
-    sys.path.insert(0, str(base_dir / "src" / "competitor_layer"))
+app = FastAPI(docs_url="/api/docs", openapi_url="/api/openapi.json")
 
-    app = FastAPI(docs_url="/api/docs", openapi_url="/api/openapi.json")
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    
-except Exception as global_e:
-    app = FastAPI()
-    error_payload = {"error": True, "detail": f"Vercel Python Lambda Global Boot Crash: {str(global_e)} | Trace: {traceback.format_exc()}"}
-    
-    @app.api_route("/{path_name:path}", methods=["GET", "POST"])
-    def catch_all(path_name: str):
-        return error_payload
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/api")
 def root():
