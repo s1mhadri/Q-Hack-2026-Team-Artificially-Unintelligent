@@ -1,0 +1,158 @@
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+Low source_confidence on fields ['purity', 'grade', 'form', 'heavy_metals', 'lead', 'residue_on_ignition', 'specific_rotation', 'ph', 'gmp_certified', 'non_gmo', 'characteristics', 'identity', 'melting_point', 'clarity_solution', 'colour_solution', 'copper', 'arsenic', 'iron', 'oxalic_acid', 'loss_on_drying', 'organic_volatile_impurities'] — values may be from a different product
+Low source_confidence on fields ['form', 'ph', 'non_gmo', 'product_name', 'inci_name', 'cas_number', 'source_material', 'chemical_classification', 'production_process', 'functional_category', 'iupac_name', 'animal_testing', 'vegan', 'odor', 'solubility', 'melting_point', 'stability', 'storage_conditions'] — values may be from a different product
+Low source_confidence on fields ['ph', 'non_gmo'] — values may be from a different product
+
+[1m[96m==========================================================================[0m
+[1m[96m  Agnes Quality Verification Layer - Live Demo[0m
+[1m[96m==========================================================================[0m
+
+  [2mGemini: gemini-2.5-flash[0m
+  [2mEvidence search: DuckDuckGo (4 results/query)[0m
+  [2mIngredients: Vitamin C (Ascorbic Acid)[0m
+
+  [2mFound 2 DB suppliers[0m
+  [2mDiscovering competitors via Layer 2...[0m
+  [2mFound 10 competitors[0m
+[1m[97m──────────────────────────────────────────────────────────────────────────[0m
+[1m[97m  [1/1] Vitamin C (Ascorbic Acid)[0m
+  [2mSuppliers: 2 from DB + 10 competitors = 12 total[0m
+[1m[97m──────────────────────────────────────────────────────────────────────────[0m
+
+  [92mDownloaded 1 PDF(s):[0m
+    [92m>[0m DB-27_ASCORBICACID.pdf [2m(370 KB)[0m
+
+  [92mShowing 4/12 suppliers with usable evidence:[0m
+
+  [1mSUP-005[0m  [93mverified_with_gaps[0m  confidence=medium
+       Evidence: 2/2 retrieved (2x SourceType.product_page)
+       Extracted: 9 total, 9 high/medium confidence
+         grade......................... BP / EP / IP / USP  [92m[high][0m
+         form.......................... white or slightly yellow crystal or p...  [92m[high][0m
+         gmp_certified................. Yes  [92m[high][0m
+         cas_number.................... 50-81-7  [92m[high][0m
+         molecular_weight.............. 176.12 g/mol  [92m[high][0m
+         therapeutic_category.......... Oral  [92m[high][0m
+         physical_properties........... Water-soluble vitamin; white or sligh...  [92m[high][0m
+         certifications................ USDMF, EU-GMP, USFDA, COFEPRIS approved  [92m[high][0m
+         regulatory_status............. FDA GRAS (generally recognized as saf...  [92m[high][0m
+       Requirements: 10 total
+         Hard: [92m1 pass[0m  [91m0 fail[0m  [93m3 unknown[0m
+         Soft: [92m2 pass[0m  [91m0 fail[0m  [93m4 unknown[0m
+         [93m[?][0m purity.............. [2mNo value found for 'purity' in any evidence source[0m
+         [92m[+][0m grade............... [2mMatches allowed value(s): ['USP', 'EP', 'BP'][0m
+         [92m[+][0m form................ [2mMatches allowed value(s): ['powder'][0m
+         [93m[?][0m heavy_metals........ [2mNo value found for 'heavy_metals' in any evidence source[0m
+         [93m[?][0m lead................ [2mNo value found for 'lead' in any evidence source[0m
+         [93m[?][0m residue_on_ignition. [2mNo value found for 'residue_on_ignition' in any evidence source[0m
+         [93m[?][0m specific_rotation... [2mNo value found for 'specific_rotation' in any evidence source[0m
+         [93m[?][0m ph.................. [2mNo value found for 'ph' in any evidence source[0m
+         [92m[+][0m gmp_certified....... [2mRequired boolean is satisfied[0m
+         [93m[?][0m non_gmo............. [2mNo value found for 'non_gmo' in any evidence source[0m
+       [93mNotes:[0m
+         [2m- Conflict on 'form': 2 sources with values {'C6H8O6', 'white or slightly yello...[0m
+         [2m- No values found for: purity, heavy_metals, lead, residue_on_ignition, specifi...[0m
+
+  [1mSUP-006[0m  [93mverified_with_gaps[0m  confidence=high
+       Evidence: 2/2 retrieved (2x SourceType.coa)
+       Extracted: 22 total, 20 high/medium confidence
+         purity........................ NLT 99.0% and NMT 100.5% %  [92m[high][0m
+         grade......................... USP, BP Ph Eur, FCC Food Grade, IP, E...  [92m[high][0m
+         form.......................... White or almost white, crystalline po...  [92m[high][0m
+         heavy_metals.................. Iron: Maximum 2 ppm; Lead: Not more t...  [92m[high][0m
+         lead.......................... Not more than 2 mg/kg  [92m[high][0m
+         residue_on_ignition........... 0.1 % maximum  [92m[high][0m
+         specific_rotation............. Between +20.5° and +21.5°  [92m[high][0m
+         gmp_certified................. Yes  [92m[high][0m
+         cas_number.................... 50-81-7  [92m[high][0m
+         molecular_weight.............. 176.12  [92m[high][0m
+         [2m... +10 more[0m
+       Requirements: 10 total
+         Hard: [92m1 pass[0m  [91m0 fail[0m  [93m3 unknown[0m
+         Soft: [92m3 pass[0m  [91m1 fail[0m  [93m2 unknown[0m
+         [93m[?][0m purity.............. [2mCould not parse numeric value from 'NLT 99.0% and NMT 100.5%'[0m
+         [92m[+][0m grade............... [2mMatches allowed value(s): ['USP', 'FCC', 'EP', 'BP'][0m
+         [92m[+][0m form................ [2mMatches allowed value(s): ['powder', 'crystalline'][0m
+         [93m[?][0m heavy_metals........ [2mCould not parse numeric value from 'Iron: Maximum 2 ppm; Lead:...[0m
+         [93m[?][0m lead................ [2mCould not parse numeric value from 'Not more than 2'[0m
+         [92m[+][0m residue_on_ignition. [2mObserved 0.1% within maximum 0.1%[0m
+         [93m[?][0m specific_rotation... [2mCould not parse numeric value from 'Between +20.5° and +21.5°'[0m
+         [93m[?][0m ph.................. [2mCould not parse numeric value from 'None'[0m
+         [92m[+][0m gmp_certified....... [2mRequired boolean is satisfied[0m
+         [91m[X][0m non_gmo............. [2mRequired boolean not met: got 'None'[0m
+       [93mNotes:[0m
+         [2m- Conflict on 'form': 2 sources with values {'C6H8O6', 'White or almost white, ...[0m
+         [2m- No values found for: purity, heavy_metals, lead, specific_rotation, ph[0m
+
+  [1mSUP-007[0m  [91mfailed_hard_requirements[0m  confidence=high
+       Evidence: 1/2 retrieved (1x SourceType.coa)
+       Extracted: 30 total, 30 high/medium confidence
+         e_no.......................... E300  [92m[high][0m
+         cas_no........................ 50-81-7  [92m[high][0m
+         appearance.................... White or almost white crystal or crys...  [92m[high][0m
+         identification................ Positive  [92m[high][0m
+         melting_point................. 191 ~ 192 ℃  [92m[high][0m
+         ph............................ 2.2 ~ 2.5  [92m[high][0m
+         specific_rotation............. +20.5 ~ +21.5 °  [92m[high][0m
+         clarity_of_solution........... Clear  [92m[high][0m
+         heavy_metals.................. ≤0.0003 %  [92m[high][0m
+         purity........................ 99.0 ~ 100.5 %  [92m[high][0m
+         [2m... +20 more[0m
+       Requirements: 10 total
+         Hard: [92m3 pass[0m  [91m1 fail[0m  [93m0 unknown[0m
+         Soft: [92m4 pass[0m  [91m0 fail[0m  [93m2 unknown[0m
+         [92m[+][0m purity.............. [2mObserved 99.0% meets minimum 99.0%[0m
+         [91m[X][0m grade............... [2m'Food Grade' not in allowed values ['USP', 'FCC', 'EP', 'BP'][0m
+         [92m[+][0m form................ [2mMatches allowed value(s): ['powder', 'crystalline'][0m
+         [92m[+][0m heavy_metals........ [2mObserved 0.0003ppm within maximum 10.0ppm[0m
+         [92m[+][0m lead................ [2mObserved 2.0ppm within maximum 2.0ppm[0m
+         [92m[+][0m residue_on_ignition. [2mObserved 0.1% within maximum 0.1%[0m
+         [92m[+][0m specific_rotation... [2mObserved 20.5degrees is within range 20.5-21.5degrees[0m
+         [92m[+][0m ph.................. [2mObserved 2.2 is within range 2.1-2.6[0m
+         [93m[?][0m gmp_certified....... [2mNo value found for 'gmp_certified' in any evidence source[0m
+         [93m[?][0m non_gmo............. [2mNo value found for 'non_gmo' in any evidence source[0m
+       [93mNotes:[0m
+         [2m- Conflict on 'ph': 3 sources with values {'BP2010/USP33/E300/FCCVII/EP7.0 100m...[0m
+         [2m- Conflict on 'arsenic': 2 sources with values {'≤2', '≤ 500'}; using value fro...[0m
+         [2m- No values found for: gmp_certified, non_gmo[0m
+
+  [1mSUP-008[0m  [93mverified_with_gaps[0m  confidence=medium
+       Evidence: 2/2 retrieved (2x SourceType.product_page)
+       Extracted: 12 total, 12 high/medium confidence
+         purity........................ ≥ 99% %  [92m[high][0m
+         grade......................... Food & Pharmaceutical Grade, USP/EP/F...  [92m[high][0m
+         form.......................... crystalline powder  [92m[high][0m
+         gmp_certified................. Yes  [92m[high][0m
+         appearance.................... White or slightly yellow crystalline ...  [92m[high][0m
+         solubility.................... Soluble in water | slightly soluble i...  [92m[high][0m
+         cas_number.................... 50-81-7  [92m[high][0m
+         shelf_life.................... 2 years  [92m[high][0m
+         storage_conditions............ cool, dry storage  [92m[high][0m
+         packaging..................... 25kg drums | 20kg cartons | 1kg pouches  [92m[high][0m
+         [2m... +2 more[0m
+       Requirements: 10 total
+         Hard: [92m2 pass[0m  [91m0 fail[0m  [93m2 unknown[0m
+         Soft: [92m2 pass[0m  [91m0 fail[0m  [93m4 unknown[0m
+         [92m[+][0m purity.............. [2mObserved 99.0% meets minimum 99.0%[0m
+         [92m[+][0m grade............... [2mMatches allowed value(s): ['USP', 'FCC', 'EP'][0m
+         [92m[+][0m form................ [2mMatches allowed value(s): ['powder', 'crystalline'][0m
+         [93m[?][0m heavy_metals........ [2mNo value found for 'heavy_metals' in any evidence source[0m
+         [93m[?][0m lead................ [2mNo value found for 'lead' in any evidence source[0m
+         [93m[?][0m residue_on_ignition. [2mNo value found for 'residue_on_ignition' in any evidence source[0m
+         [93m[?][0m specific_rotation... [2mNo value found for 'specific_rotation' in any evidence source[0m
+         [93m[?][0m ph.................. [2mNo value found for 'ph' in any evidence source[0m
+         [92m[+][0m gmp_certified....... [2mRequired boolean is satisfied[0m
+         [93m[?][0m non_gmo............. [2mNo value found for 'non_gmo' in any evidence source[0m
+       [93mNotes:[0m
+         [2m- Conflict on 'form': 2 sources with values {'crystalline powder', 'C₆H₈O₆'}; u...[0m
+         [2m- No values found for: heavy_metals, lead, residue_on_ignition, specific_rotati...[0m
+
+  [2mSkipped (low confidence): DB-27, DB-28, SUP-001, SUP-002, SUP-003 +3 more[0m
+  [2mCompleted in 259s[0m
+
+[1m[96m==========================================================================[0m
+[1m[96m  Done. Showing 4 high-confidence suppliers (of 12 total) in 504s[0m
+[1m[96m  PDFs saved to: /Users/marvin/Documents/workspace/Q-Hack-2026-Team-Artificially-Unintelligent/src/quality_verification_layer/demo_output[0m
+[1m[96m==========================================================================[0m
+
