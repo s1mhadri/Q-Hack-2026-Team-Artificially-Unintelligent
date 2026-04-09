@@ -1,14 +1,22 @@
-from fastapi import FastAPI
 import asyncio
-from .models import PreprocessingInput, MyIngredientOutput, IngredientOutput, ContextOutput
+
+from fastapi import FastAPI
+
 from .agents import run_aliases_agent, run_context_agent, run_supplier_agent
+from .models import (
+    ContextOutput,
+    IngredientOutput,
+    MyIngredientOutput,
+    PreprocessingInput,
+)
 
 app = FastAPI(title="Preprocessing Layer API")
+
 
 @app.post("/api/v1/preprocess", response_model=MyIngredientOutput)
 async def preprocess_ingredient(input_data: PreprocessingInput):
     # Synchronous Extraction
-    parts = input_data.RM_sku.split('-')
+    parts = input_data.RM_sku.split("-")
     if len(parts) >= 4:
         # e.g., RM-C56-citric-acid-d55c874f -> "citric acid"
         canonical_name = " ".join(parts[2:-1])
@@ -21,7 +29,9 @@ async def preprocess_ingredient(input_data: PreprocessingInput):
     supplier_task = run_supplier_agent(input_data.RM_sku)
 
     aliases, category, supplier = await asyncio.gather(
-        aliases_task, context_task, supplier_task
+        aliases_task,
+        context_task,
+        supplier_task,
     )
 
     return MyIngredientOutput(
@@ -29,11 +39,11 @@ async def preprocess_ingredient(input_data: PreprocessingInput):
         ingredient=IngredientOutput(
             ingredient_id=input_data.RM_sku,
             canonical_name=canonical_name,
-            aliases=aliases
+            aliases=aliases,
         ),
         context=ContextOutput(
             product_category=category,
-            region="Global"
+            region="Global",
         ),
-        baseline_supplier=supplier
+        baseline_supplier=supplier,
     )
