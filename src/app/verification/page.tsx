@@ -61,6 +61,7 @@ export default function VerificationPage() {
   const [suppliers, setSuppliers] = useState<SupplierResult[]>([]);
   const [scanProgress, setScanProgress] = useState(0);
   const [error, setError] = useState("");
+  const [docsRequested, setDocsRequested] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("agnes_ingredient");
@@ -258,7 +259,13 @@ export default function VerificationPage() {
                                 <p className="text-[0.6rem] text-on-surface-variant">{s.region || ""}</p>
                               </div>
                             </div>
-                            <button className="w-full py-2 primary-gradient text-on-primary text-[0.7rem] font-bold uppercase tracking-widest rounded-lg shadow-sm hover:opacity-90 transition-all">
+                            <button
+                              onClick={() => {
+                                localStorage.setItem("agnes_manual_override", s.name || s.supplier_name || "");
+                                router.push("/decision");
+                              }}
+                              className="w-full py-2 primary-gradient text-on-primary text-[0.7rem] font-bold uppercase tracking-widest rounded-lg shadow-sm hover:opacity-90 transition-all"
+                            >
                               Select Option
                             </button>
                           </div>
@@ -343,9 +350,19 @@ export default function VerificationPage() {
               <p className="text-xs text-on-surface-variant leading-relaxed">
                 4 missing documents required to finalize high-confidence verification.
               </p>
-              <button className="w-full py-3 primary-gradient text-on-primary rounded-xl text-xs font-black uppercase tracking-[0.12em] shadow-lg hover:opacity-90 transition-all flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined text-lg">mail</span>
-                Request Missing Docs
+              <button
+                onClick={() => setDocsRequested(true)}
+                disabled={docsRequested}
+                className={`w-full py-3 ${
+                  docsRequested
+                    ? "bg-tertiary-container text-on-tertiary-container"
+                    : "primary-gradient text-on-primary shadow-lg"
+                } rounded-xl text-xs font-black uppercase tracking-[0.12em] hover:opacity-90 transition-all flex items-center justify-center gap-2`}
+              >
+                <span className="material-symbols-outlined text-lg">
+                  {docsRequested ? "check_circle" : "mail"}
+                </span>
+                {docsRequested ? "Requested" : "Request Missing Docs"}
               </button>
             </div>
 

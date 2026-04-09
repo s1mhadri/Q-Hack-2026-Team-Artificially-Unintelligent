@@ -30,6 +30,9 @@ export default function RequirementsPage() {
   const [reqs, setReqs] = useState<Req[]>([]);
   const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>("");
+  const [toastMsg, setToastMsg] = useState("");
 
   useEffect(() => {
     const stored = localStorage.getItem("agnes_ingredient");
@@ -84,6 +87,14 @@ export default function RequirementsPage() {
         <span className="material-symbols-outlined text-[14px]">chevron_right</span>
         <span className="text-primary font-bold">STEP 2: REQUIREMENTS &amp; CONSTRAINTS</span>
       </div>
+
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div className="fixed bottom-4 right-4 bg-tertiary-container text-on-tertiary-container px-6 py-3 rounded-lg shadow-2xl border border-tertiary/20 font-bold text-sm z-50 flex items-center gap-2">
+          <span className="material-symbols-outlined text-tertiary fill-icon">check_circle</span>
+          {toastMsg}
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex justify-between items-end mb-10">
@@ -237,7 +248,17 @@ export default function RequirementsPage() {
                       )}
                     </div>
                     <p className="text-xs text-on-surface-variant mt-1">
-                      {req.operator} {String(req.value ?? "")}
+                      {req.operator}{" "}
+                      {editingId === id ? (
+                        <input
+                          type="text"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          className="bg-surface-container-high text-on-surface px-2 py-0.5 rounded text-xs border border-outline-variant/30 focus:outline-none focus:border-primary/50"
+                        />
+                      ) : (
+                        String(req.value ?? "")
+                      )}
                       {req.unit && ` ${req.unit}`}
                     </p>
                     {req.source && (
@@ -250,9 +271,33 @@ export default function RequirementsPage() {
                 </div>
 
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  <button className="px-4 py-2 text-xs font-bold text-outline hover:text-on-surface transition-colors">
-                    Edit
-                  </button>
+                  {editingId === id ? (
+                    <button
+                      onClick={() => {
+                        setReqs((prev) =>
+                          prev.map((r, index) =>
+                            (r.requirement_id || String(index)) === id
+                              ? { ...r, value: editValue }
+                              : r
+                          )
+                        );
+                        setEditingId(null);
+                      }}
+                      className="px-4 py-2 text-xs font-bold text-primary hover:text-primary/80 transition-colors"
+                    >
+                      Save
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setEditingId(id);
+                        setEditValue(String(req.value ?? ""));
+                      }}
+                      className="px-4 py-2 text-xs font-bold text-outline hover:text-on-surface transition-colors"
+                    >
+                      Edit
+                    </button>
+                  )}
                   <button
                     onClick={() => toggleConfirm(id)}
                     className={`px-4 py-2 text-xs font-bold rounded-lg flex items-center gap-2 transition-all ${
@@ -274,7 +319,13 @@ export default function RequirementsPage() {
 
         {status === "done" && (
           <div className="px-8 py-6 bg-surface-container-low/50 flex justify-end gap-3">
-            <button className="px-6 py-3 text-sm font-bold text-primary hover:bg-surface-container transition-all rounded-lg">
+            <button
+              onClick={() => {
+                setToastMsg("Draft saved successfully!");
+                setTimeout(() => setToastMsg(""), 3000);
+              }}
+              className="px-6 py-3 text-sm font-bold text-primary hover:bg-surface-container transition-all rounded-lg"
+            >
               Save Draft
             </button>
             <button

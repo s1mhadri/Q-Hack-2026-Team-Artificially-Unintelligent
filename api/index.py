@@ -3,7 +3,7 @@ import asyncio
 import sys
 import json
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 # Add the project root to sys path so we can import src and competitor_layer
@@ -11,6 +11,15 @@ base_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(base_dir))
 sys.path.insert(0, str(base_dir / "src" / "competitor_layer"))
 sys.path.insert(0, str(base_dir / "src" / "quality_verification_layer"))
+
+# Real SQLite catalog helpers
+from api.catalog_db import (
+    get_finished_goods,
+    get_bom_for_fg,
+    get_all_suppliers,
+    get_suppliers_for_rm,
+    get_top_raw_materials,
+)
 
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 
@@ -105,27 +114,41 @@ async def layer2_test(ingredient: str = "Ascorbic Acid"):
         return {"error": "Layer 2 Engine Failure", "detail": str(e)}
 
 @app.get("/api/py/layer3")
-async def layer3_test():
-    await asyncio.sleep(2.5)
-    return {
-        "status": "simulated",
-        "verifications": [
-            {"supplier": "GlobalChem", "assay_extracted": "99.2%", "pass": True, "confidence": 0.95},
-            {"supplier": "NaturaIng", "assay_extracted": "99.5%", "pass": True, "confidence": 0.98},
-            {"supplier": "StandardPowders", "assay_extracted": "Unknown", "pass": False, "confidence": 0.40}
-        ]
-    }
+async def layer3_test(ingredient: str = "Whey Protein Isolate"):
+    """Delegates to the real E2E pipeline and returns the Layer 3 verification data."""
+    try:
+        from src.e2e_runner import run_e2e
+        result = run_e2e(ingredient)
+        layer3_raw = result.get("layer3_raw", [])
+        return {
+            "status": "real",
+            "ingredient": ingredient,
+            "verifications": [
+                {
+                    "supplier": s["supplier"],
+                    "overall_status": s["status"],
+                    "confidence": s["confidence"],
+                    "extracted": s.get("extracted", [])
+                }
+                for s in layer3_raw
+            ]
+        }
+    except Exception as e:
+        return {"error": "Layer 3 Engine Failure", "detail": str(e)}
 
 @app.get("/api/py/layer4")
-async def layer4_test():
-    await asyncio.sleep(1.0)
-    return {
-        "status": "simulated",
-        "recommendation": "Accept",
-        "target_supplier": "NaturaIng",
-        "explanation": "NaturaIng exceeds the 99.0% assay requirement (verified at 99.5%) and provides verifiable COA documentation.",
-        "confidence": 0.92
-    }
+async def layer4_test(ingredient: str = "Whey Protein Isolate"):
+    """Delegates to the real E2E pipeline and returns the Layer 4 decision."""
+    try:
+        from src.e2e_runner import run_e2e
+        result = run_e2e(ingredient)
+        return {
+            "status": "real",
+            "ingredient": ingredient,
+            **result.get("decision", {})
+        }
+    except Exception as e:
+        return {"error": "Layer 4 Engine Failure", "detail": str(e)}
 
 @app.get("/api/py/e2e")
 async def e2e_test(ingredient: str = "Vitamin C"):
@@ -134,6 +157,43 @@ async def e2e_test(ingredient: str = "Vitamin C"):
         return run_e2e(ingredient)
     except Exception as e:
         return {"error": "E2E Engine Failure", "detail": str(e)}
+
+# ---------------------------------------------------------------------------
+# Real DB Catalog Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/py/catalog/products")
+def catalog_products(limit: int = Query(default=12, le=50)):
+    """Return real finished-good products from the SQLite catalog."""
+    try:
+        return {"products": get_finished_goods(limit=limit)}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/py/catalog/bom")
+def catalog_bom(sku: str = Query(..., description="Finished-good SKU")):
+    """Return the real BOM components for a finished-good SKU."""
+    try:
+        components = get_bom_for_fg(sku)
+        return {"sku": sku, "components": components}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/py/catalog/suppliers")
+def catalog_suppliers():
+    """Return all known suppliers from the real database."""
+    try:
+        return {"suppliers": get_all_suppliers()}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/py/catalog/top-ingredients")
+def catalog_top_ingredients(limit: int = Query(default=10, le=30)):
+    """Return the most-used raw material ingredients across all BOMs."""
+    try:
+        return {"ingredients": get_top_raw_materials(limit=limit)}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/api/py/health/keys")
 async def health_keys():

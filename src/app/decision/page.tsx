@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 type Status = "idle" | "loading" | "done" | "error";
 
@@ -17,11 +18,37 @@ type DecisionData = {
 const DUMMY_CONSTANT = false;
 
 export default function DecisionPage() {
+  const router = useRouter();
   const [ingredient, setIngredient] = useState("Whey Protein Isolate");
   const [status, setStatus] = useState<Status>("idle");
   const [decision, setDecision] = useState<DecisionData | null>(null);
   const [executed, setExecuted] = useState(false);
   const [error, setError] = useState("");
+
+  const applyOverride = (dec: DecisionData) => {
+    const override = localStorage.getItem("agnes_manual_override");
+    if (override) {
+      return {
+        ...dec,
+        target_supplier: override,
+        recommendation: `Manual Selection: ${override}`,
+        explanation: `The user manually selected ${override} during the Verification Step, overriding the AI default recommendation.`,
+      };
+    }
+    return dec;
+  };
+
+  const handleExport = () => {
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + `Target Supplier,Recommendation,Confidence,Quality Index,Risk Score\n${decision?.target_supplier || ""},${decision?.recommendation || ""},${decision?.confidence || ""},${decision?.quality_index || ""},${decision?.risk_score || ""}`;
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Agnes_Decision_Report.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem("agnes_ingredient");
@@ -40,7 +67,7 @@ export default function DecisionPage() {
       try {
         const e2eData = JSON.parse(storedE2E);
         if (e2eData && e2eData.decision) {
-          setDecision(e2eData.decision);
+          setDecision(applyOverride(e2eData.decision));
           setStatus("done");
           return;
         }
@@ -56,12 +83,13 @@ export default function DecisionPage() {
         throw new Error(data.error);
       } else {
         const dec = data.decision || {};
-        setDecision({
+        const fullDec = {
           ...dec,
           quality_index: dec.quality_index ?? 98.4,
           sustainability: dec.sustainability ?? "A+",
           risk_score: dec.risk_score ?? "Low",
-        });
+        };
+        setDecision(applyOverride(fullDec));
         localStorage.setItem("agnes_e2e_result", JSON.stringify(data));
       }
 
@@ -113,7 +141,10 @@ export default function DecisionPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <button className="px-6 py-3 bg-surface-container-high text-on-surface font-semibold rounded-xl text-sm transition-all hover:bg-surface-container-highest">
+          <button
+            onClick={handleExport}
+            className="px-6 py-3 bg-surface-container-high text-on-surface font-semibold rounded-xl text-sm transition-all hover:bg-surface-container-highest"
+          >
             Export Report
           </button>
           <button
@@ -300,11 +331,22 @@ export default function DecisionPage() {
               Action required to finalize
             </p>
             <div className="flex items-center gap-6">
-              <button className="text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors">
+              <button
+                onClick={handleExport}
+                className="text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors"
+              >
                 Export Data
               </button>
               <span className="text-outline-variant">|</span>
-              <button className="text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors">
+              <button
+                onClick={() => {
+                  localStorage.removeItem("agnes_ingredient");
+                  localStorage.removeItem("agnes_e2e_result");
+                  localStorage.removeItem("agnes_manual_override");
+                  router.push("/");
+                }}
+                className="text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors"
+              >
                 Dismiss Analysis
               </button>
               <button
