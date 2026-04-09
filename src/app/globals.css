@@ -1,9 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
 @layer base {
   body {
@@ -29,16 +29,6 @@
   }
   .primary-gradient {
     background: linear-gradient(135deg, #545e76 0%, #48526a 100%);
-  }
-  .step-active {
-    color: #545e76;
-    font-weight: 700;
-    border-bottom: 2px solid #545e76;
-  }
-  .step-inactive {
-    color: #586064;
-    font-weight: 500;
-    border-bottom: 2px solid transparent;
   }
   .custom-scrollbar::-webkit-scrollbar { width: 4px; }
   .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
