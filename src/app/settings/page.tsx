@@ -10,7 +10,7 @@ export default function SettingsPage() {
     setLoading(true);
     setResults(null);
     try {
-      const res = await fetch("/api/health/keys");
+      const res = await fetch("/api/py/health/keys");
       
       let data;
       const textPayload = await res.text();

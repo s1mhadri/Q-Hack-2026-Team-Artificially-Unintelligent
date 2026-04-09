@@ -21,18 +21,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/api")
+@app.get("/api/py")
 def root():
     return {
         "ok": True,
         "message": "Agnes backend is live"
     }
 
-@app.get("/api/health")
+@app.get("/api/py/health")
 def health():
     return {"status": "healthy"}
 
-@app.get("/api/layer1")
+@app.get("/api/py/layer1")
 async def layer1_test(ingredient: str = "Ascorbic Acid"):
     try:
         from src.requirement_layer.runner import run as run_requirement_layer
@@ -77,7 +77,7 @@ async def layer1_test(ingredient: str = "Ascorbic Acid"):
     except BaseException as e:
         return {"error": "Server Caught Fatal Error", "detail": str(e)}
 
-@app.get("/api/layer2")
+@app.get("/api/py/layer2")
 async def layer2_test(ingredient: str = "Ascorbic Acid"):
     try:
         from competitor_layer.runner import run_from_json
@@ -109,7 +109,7 @@ async def layer2_test(ingredient: str = "Ascorbic Acid"):
     except Exception as e:
         return {"error": "Layer 2 Engine Failure", "detail": str(e)}
 
-@app.get("/api/layer3")
+@app.get("/api/py/layer3")
 async def layer3_test():
     await asyncio.sleep(2.5)
     return {
@@ -121,7 +121,7 @@ async def layer3_test():
         ]
     }
 
-@app.get("/api/layer4")
+@app.get("/api/py/layer4")
 async def layer4_test():
     await asyncio.sleep(1.0)
     return {
@@ -132,7 +132,7 @@ async def layer4_test():
         "confidence": 0.92
     }
 
-@app.get("/api/health/keys")
+@app.get("/api/py/health/keys")
 async def health_keys():
     import traceback
     try:
@@ -180,3 +180,16 @@ async def health_keys():
         }
     except Exception as e:
         return {"error": True, "detail": f"Server diagnostics gracefully caught a runtime exception: {str(e)}\\n{traceback.format_exc()}"}
+from fastapi import Request
+@app.api_route('/{path_name:path}', methods=['GET', 'POST', 'PUT', 'DELETE'])
+async def catch_all(request: Request, path_name: str):
+    return {'received_path': path_name, 'raw_url': str(request.url), 'scope_path': request.scope.get('path')}
+
+@app.get('/debug')
+async def debug(request: Request):
+    return {'path': request.scope.get('path')}
+
+from fastapi import Request
+@app.api_route('/{path_name:path}', methods=['GET', 'POST', 'PUT', 'DELETE'])
+async def catch_all2(request: Request, path_name: str):
+    return {'path_raw': request.scope.get('path'), 'path_name': path_name}
