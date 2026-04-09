@@ -81,70 +81,40 @@ export default function VerificationPage() {
 
     try {
       // Run Layer 2 (supplier discovery)
-      const [l2, l3] = await Promise.allSettled([
-        fetch(`/api/py/layer2?ingredient=${encodeURIComponent(ing)}`).then((r) => r.json()),
-        fetch(`/api/py/layer3`).then((r) => r.json()),
-      ]);
+      // Run the real E2E Pipeline (this takes 60-90s)
+      const res = await fetch(`/api/py/e2e?ingredient=${encodeURIComponent(ing)}`);
+      const data = await res.json();
+
+      if (data.error || data.status === "error") {
+        throw new Error(data.error_detail || data.error || "E2E Engine Failure");
+      }
 
       clearInterval(progressInterval);
       setScanProgress(100);
 
-      const layer2Data = l2.status === "fulfilled" ? l2.value : null;
-      const layer3Data = l3.status === "fulfilled" ? l3.value : null;
+      const layer3Raw = data.layer3_raw || [];
 
-      const discoveredSuppliers: SupplierResult[] =
-        layer2Data?.candidates || layer2Data?.suppliers || [];
+      // Map layer3_raw to SupplierResult
+      const finalSuppliers: SupplierResult[] = layer3Raw.map((s: any) => {
+        // Extract fields dynamically from what the AI extracted
+        const getField = (fName: string) => s.extracted?.find((x: any) => x.field.toLowerCase() === fName.toLowerCase())?.value;
 
-      // Merge layer 3 verification data
-      const verifications = layer3Data?.verifications || [];
-      const merged = discoveredSuppliers.map((s, i) => {
-        const v = verifications[i] || {};
-        return { ...s, ...v };
+        return {
+          name: s.supplier,
+          supplier_name: s.supplier,
+          region: "Global", // fallback since region isn't extracted
+          purity: getField("purity") || getField("protein") || getField("assay"),
+          certification: getField("certification") || getField("organic"),
+          processing: getField("processing"),
+          sodium: getField("sodium"),
+          calcium: getField("calcium"),
+          esg: getField("esg") || getField("sustainability"),
+          pass: s.status === "verified" || s.status === "verified_with_gaps" ? true : s.status === "failed_hard_requirements" ? false : undefined,
+        };
       });
 
-      // If no real data, use mock fallback to show the UI
-      const finalSuppliers: SupplierResult[] =
-        merged.length > 0
-          ? merged
-          : [
-              {
-                name: "Actus Nutrition",
-                region: "Denmark • Tier 1",
-                purity: "92.4%",
-                certification: "EU Certified",
-                processing: "Cold-processed",
-                sodium: "142mg",
-                calcium: "510mg",
-                esg: "Pending",
-                pass: true,
-              },
-              {
-                name: "Arla Ingredients",
-                region: "Global • Primary",
-                purity: "91.1%",
-                certification: "Expired",
-                processing: "Standard Thermal",
-                sodium: "195mg",
-                calcium: "480mg",
-                esg: "Verified",
-                pass: false,
-              },
-              {
-                name: "Prinova Group",
-                region: "Netherlands • Tier 2",
-                purity: undefined,
-                certification: "GlobalCert",
-                processing: "Cold-processed",
-                sodium: undefined,
-                calcium: undefined,
-                esg: "Verified",
-                pass: undefined,
-              },
-            ];
-
       setSuppliers(finalSuppliers);
-      localStorage.setItem("agnes_layer2", JSON.stringify(layer2Data));
-      localStorage.setItem("agnes_layer3", JSON.stringify(layer3Data));
+      localStorage.setItem("agnes_e2e_result", JSON.stringify(data));
       setStatus("done");
     } catch (e: any) {
       clearInterval(progressInterval);

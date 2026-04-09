@@ -14,30 +14,7 @@ type DecisionData = {
   risk_score?: string;
 };
 
-const AUDIT_TRAIL = [
-  { date: "Apr 12 • Filtering", detail: "142 Suppliers reduced to 5 via technical feasibility check." },
-  { date: "Apr 14 • LCA Audit", detail: "Lifecycle Analysis confirms top supplier's superior carbon profile." },
-  { date: "Apr 15 • Final Scoring", detail: "Matrix weighing prioritized Reliability (40%) and ESG (30%)." },
-];
-
-const CANDIDATES = [
-  {
-    rank: "#2",
-    name: "Glanbia PLC",
-    desc: "Strong supply chain, higher unit cost.",
-    costIndex: 114.2,
-    costBar: 85,
-    reliability: 94,
-  },
-  {
-    rank: "#3",
-    name: "Fonterra Co-op",
-    desc: "Excellent quality, high logistics risk.",
-    costIndex: 98.1,
-    costBar: 98,
-    reliability: 78,
-  },
-];
+const DUMMY_CONSTANT = false;
 
 export default function DecisionPage() {
   const [ingredient, setIngredient] = useState("Whey Protein Isolate");
@@ -49,54 +26,49 @@ export default function DecisionPage() {
   useEffect(() => {
     const stored = localStorage.getItem("agnes_ingredient");
     if (stored) setIngredient(stored);
-    runLayer4();
+    runLayer4(stored || "Whey Protein Isolate");
   }, []);
 
-  const runLayer4 = async () => {
+  const runLayer4 = async (ing: string) => {
     setStatus("loading");
     setDecision(null);
     setError("");
 
+    // Try reading from E2E local storage first (from the Verification step)
+    const storedE2E = localStorage.getItem("agnes_e2e_result");
+    if (storedE2E) {
+      try {
+        const e2eData = JSON.parse(storedE2E);
+        if (e2eData && e2eData.decision) {
+          setDecision(e2eData.decision);
+          setStatus("done");
+          return;
+        }
+      } catch (e) {}
+    }
+
     try {
-      const res = await fetch("/api/py/layer4");
+      // Run the real E2E pipeline for decision if there's no stored context
+      const res = await fetch(`/api/py/e2e?ingredient=${encodeURIComponent(ing)}`);
       const data = await res.json();
 
       if (data.error) {
-        // Use mock data to show the full decision UI
-        setDecision({
-          recommendation: "Arla Ingredients",
-          target_supplier: "Arla Ingredients",
-          explanation:
-            "Arla Ingredients is prioritized due to its unique alignment with our 2024 Sustainability Mandate and the strict batch-testing requirements of the athlete-facing product line. Unit price is 4% higher, but offset by 15% logistics savings from the northern distribution hub.",
-          confidence: 0.92,
-          quality_index: 98.4,
-          sustainability: "A+",
-          risk_score: "Low",
-        });
+        throw new Error(data.error);
       } else {
+        const dec = data.decision || {};
         setDecision({
-          ...data,
-          quality_index: data.quality_index ?? 98.4,
-          sustainability: data.sustainability ?? "A+",
-          risk_score: data.risk_score ?? "Low",
+          ...dec,
+          quality_index: dec.quality_index ?? 98.4,
+          sustainability: dec.sustainability ?? "A+",
+          risk_score: dec.risk_score ?? "Low",
         });
-        localStorage.setItem("agnes_layer4", JSON.stringify(data));
+        localStorage.setItem("agnes_e2e_result", JSON.stringify(data));
       }
 
       setStatus("done");
     } catch (e: any) {
-      // Fallback to mock on network error
-      setDecision({
-        recommendation: "Arla Ingredients",
-        target_supplier: "Arla Ingredients",
-        explanation:
-          "Arla Ingredients is prioritized due to its unique alignment with our 2024 Sustainability Mandate and the strict batch-testing requirements of the athlete-facing product line.",
-        confidence: 0.92,
-        quality_index: 98.4,
-        sustainability: "A+",
-        risk_score: "Low",
-      });
-      setStatus("done");
+      setError(e.message);
+      setStatus("error");
     }
   };
 
@@ -290,70 +262,34 @@ export default function DecisionPage() {
                     </div>
                   ))}
                 </div>
-              </div>
-
-              {/* Explainability Trail */}
+                          {/* Explainability Trail */}
               <div className="bg-surface-container-lowest rounded-2xl p-6 border border-outline-variant/10">
                 <h4 className="text-[0.7rem] font-black uppercase tracking-[0.1em] text-on-surface-variant mb-5">
                   Explainability Trail
                 </h4>
                 <div className="relative pl-6 space-y-5 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-px before:bg-outline-variant/30">
-                  {AUDIT_TRAIL.map((item) => (
-                    <div key={item.date} className="relative">
+                    <div className="relative">
                       <div className="absolute -left-[19px] top-0.5 w-2.5 h-2.5 rounded-full bg-primary border-2 border-surface" />
                       <p className="text-[0.7rem] font-bold text-on-surface-variant uppercase tracking-tighter">
-                        {item.date}
+                        Layer 1 Extraction
                       </p>
-                      <p className="text-xs text-on-surface leading-tight mt-1">{item.detail}</p>
+                      <p className="text-xs text-on-surface leading-tight mt-1">Successfully synthesized component properties constraints.</p>
                     </div>
-                  ))}
+                    <div className="relative">
+                      <div className="absolute -left-[19px] top-0.5 w-2.5 h-2.5 rounded-full bg-primary border-2 border-surface" />
+                      <p className="text-[0.7rem] font-bold text-on-surface-variant uppercase tracking-tighter">
+                        Layer 2 Discovery
+                      </p>
+                      <p className="text-xs text-on-surface leading-tight mt-1">Scraped global manufacturer indices for {ingredient}.</p>
+                    </div>
+                    <div className="relative">
+                      <div className="absolute -left-[19px] top-0.5 w-2.5 h-2.5 rounded-full bg-primary border-2 border-surface" />
+                      <p className="text-[0.7rem] font-bold text-on-surface-variant uppercase tracking-tighter">
+                        Layer 3 Verification
+                      </p>
+                      <p className="text-xs text-on-surface leading-tight mt-1">Sourced and verified documentation against strict layer 1 parameters.</p>
+                    </div>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Comparative Candidates */}
-          <div className="bg-surface-container-low rounded-xl p-8 mb-12">
-            <h3 className="text-xl font-bold text-on-surface mb-6">Comparative Candidates</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {CANDIDATES.map((c) => (
-                <div
-                  key={c.name}
-                  className="bg-surface-container-lowest p-6 rounded-xl group hover:ring-2 ring-primary/20 transition-all cursor-pointer"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-xs font-bold uppercase tracking-widest text-outline">{c.rank} Rank</span>
-                    <span className="material-symbols-outlined text-outline">more_vert</span>
-                  </div>
-                  <h5 className="text-lg font-bold text-on-surface mb-1">{c.name}</h5>
-                  <p className="text-xs text-on-surface-variant mb-5">{c.desc}</p>
-                  <div className="space-y-3 mb-5">
-                    {[
-                      { label: "Cost Index", val: c.costIndex, bar: c.costBar },
-                      { label: "Reliability", val: `${c.reliability}%`, bar: c.reliability },
-                    ].map((m) => (
-                      <div key={m.label}>
-                        <div className="flex justify-between items-center text-xs mb-1">
-                          <span className="text-on-surface-variant">{m.label}</span>
-                          <span className="font-bold">{m.val}</span>
-                        </div>
-                        <div className="w-full bg-surface-container h-1 rounded-full overflow-hidden">
-                          <div className="bg-secondary h-full rounded-full" style={{ width: `${m.bar}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <button className="w-full py-2 text-xs font-bold uppercase tracking-widest text-primary border border-primary/20 rounded-lg group-hover:primary-gradient group-hover:text-on-primary transition-all">
-                    View Full Data
-                  </button>
-                </div>
-              ))}
-
-              <div className="border-2 border-dashed border-outline-variant/30 p-6 rounded-xl flex flex-col items-center justify-center text-on-surface-variant group cursor-pointer hover:border-primary/50 transition-all">
-                <span className="material-symbols-outlined text-3xl mb-2 group-hover:scale-110 transition-transform">
-                  add_circle
-                </span>
-                <p className="text-xs font-bold uppercase tracking-widest">Compare Others</p>
               </div>
             </div>
           </div>
@@ -379,7 +315,7 @@ export default function DecisionPage() {
                 Confirm &amp; Implement Decision
               </button>
             </div>
-          </div>
+          </div>    </div>
         </>
       )}
     </div>
