@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 base_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(base_dir))
 sys.path.insert(0, str(base_dir / "src" / "competitor_layer"))
+sys.path.insert(0, str(base_dir / "src" / "quality_verification_layer"))
 
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 
@@ -125,6 +126,14 @@ async def layer4_test():
         "explanation": "NaturaIng exceeds the 99.0% assay requirement (verified at 99.5%) and provides verifiable COA documentation.",
         "confidence": 0.92
     }
+
+@app.get("/api/py/e2e")
+async def e2e_test(ingredient: str = "Vitamin C"):
+    try:
+        from src.e2e_runner import run_e2e
+        return run_e2e(ingredient)
+    except Exception as e:
+        return {"error": "E2E Engine Failure", "detail": str(e)}
 
 @app.get("/api/py/health/keys")
 async def health_keys():
