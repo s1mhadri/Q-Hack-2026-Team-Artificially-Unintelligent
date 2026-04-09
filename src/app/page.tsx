@@ -1,140 +1,100 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RequirementsTab } from "./components/RequirementsTab";
+import { SuppliersTab } from "./components/SuppliersTab";
+import { VerificationTab } from "./components/VerificationTab";
+import { RankingTab } from "./components/RankingTab";
+import { AgentTrace } from "./components/AgentTrace";
+import { SourceViewer } from "./components/PdfPreview";
+import { usePipeline } from "./hooks/usePipeline";
 
-// --- Types from real DB ---
-type Product = {
-  Id: number;
-  SKU: string;
-  company: string;
+const TAB_ORDER = ["requirements", "suppliers", "verification", "ranking"] as const;
+
+const LAYER_TO_TAB: Record<string, string> = {
+  L1: "requirements",
+  L2: "suppliers",
+  L3: "verification",
+  RANK: "ranking",
 };
 
-type BomComponent = {
-  rm_sku: string;
-  rm_company: string;
-  supplier_count: number;
-  name: string;
-};
+export default function WorkspacePage() {
+  const { state, run, reset } = usePipeline();
+  const [activeTab, setActiveTab] = useState("requirements");
+  const [ingredients, setIngredients] = useState<string[]>([]);
+  const [selectedIngredient, setSelectedIngredient] = useState("niacinamide");
+  const [traceCollapsed, setTraceCollapsed] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; evidenceId: string } | null>(null);
 
-type Status = "idle" | "loading" | "done" | "error";
+  // Track which tab was manually set to avoid overriding user navigation
+  const userNavigatedRef = useRef(false);
 
-// Utility: extract ingredient name from raw-material SKU
-function skuToName(sku: string): string {
-  // RM-Cnn-ingredient-name-hexhash → strip prefix and hash
-  return sku
-    .replace(/^RM-C\d+-/, "")
-    .replace(/-[0-9a-f]{8}$/, "")
-    .split("-")
-    .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
-// Map company to a Material Icon name (best-effort)
-const COMPANY_ICON: Record<string, string> = {
-  "Optimum Nutrition": "fitness_center",
-  "NOW Foods": "science",
-  "Nature Made": "eco",
-  "One A Day": "local_pharmacy",
-  "Animal": "sports_mma",
-  "Equate": "medication",
-  "Body Fortress": "sports_gymnastics",
-  "Biochem": "biotech",
-};
-function iconForCompany(company: string): string {
-  return COMPANY_ICON[company] || "inventory_2";
-}
-
-export default function SelectionPage() {
-  const router = useRouter();
-
-  // Products from DB
-  const [products, setProducts] = useState<Product[]>([]);
-  const [selectedSku, setSelectedSku] = useState<string | null>(null);
-  const [productsStatus, setProductsStatus] = useState<Status>("idle");
-
-  // BOM from DB
-  const [bomComponents, setBomComponents] = useState<BomComponent[]>([]);
-  const [bomStatus, setBomStatus] = useState<Status>("idle");
-  const [selectedIngredient, setSelectedIngredient] = useState<BomComponent | null>(null);
-
-  const [toastMsg, setToastMsg] = useState("");
-
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(""), 3000);
-  };
-
-  // Load real products on mount
+  // Load ingredients on mount
   useEffect(() => {
-    setProductsStatus("loading");
-    fetch("/api/py/catalog/products?limit=12")
+    const isDev = process.env.NODE_ENV === "development";
+    const baseUrl = isDev ? "http://127.0.0.1:8000" : "";
+    fetch(`${baseUrl}/api/py/ingredients`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.error) throw new Error(data.error);
-        const prods: Product[] = data.products || [];
-        setProducts(prods);
-        if (prods.length > 0) {
-          setSelectedSku(prods[0].SKU);
-        }
-        setProductsStatus("done");
+        if (data.ingredients) setIngredients(data.ingredients);
       })
-      .catch(() => setProductsStatus("error"));
+      .catch(() => {});
   }, []);
 
-  // Load BOM whenever selected product changes
+  // Auto-advance tabs when layers complete
   useEffect(() => {
-    if (!selectedSku) return;
-    setBomStatus("loading");
-    setBomComponents([]);
-    setSelectedIngredient(null);
-    fetch(`/api/py/catalog/bom?sku=${encodeURIComponent(selectedSku)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.error) throw new Error(data.error);
-        const comps: BomComponent[] = data.components || [];
-        setBomComponents(comps);
-        setBomStatus("done");
-      })
-      .catch(() => setBomStatus("error"));
-  }, [selectedSku]);
-
-  const selectedProduct = products.find((p) => p.SKU === selectedSku) || null;
-
-  const startAnalysis = async (row: BomComponent, product: Product | null) => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("agnes_ingredient", row.name);
-      localStorage.setItem("agnes_layer1", "");
-      localStorage.setItem("agnes_layer2", "");
-      localStorage.setItem("agnes_layer3", "");
-      localStorage.setItem("agnes_layer4", "");
-      localStorage.removeItem("agnes_manual_override");
-      localStorage.removeItem("agnes_e2e_result");
-      
-      try {
-        setToastMsg("Running preprocessing layer...");
-        const res = await fetch("/api/py/preprocess", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            schema_version: "1.0",
-            company_id: product?.Id || 1,
-            company_name: row.rm_company,
-            RM_id: row.rm_sku,
-            RM_sku: row.rm_sku
-          })
-        });
-        
-        if (!res.ok) {
-           throw new Error("Preprocessing failed");
-        }
-        const data = await res.json();
-        localStorage.setItem("agnes_preprocessed_data", JSON.stringify(data));
-        router.push("/requirements");
-      } catch (e: any) {
-        showToast("Error during preprocessing: " + e.message);
-      }
+    if (state.status !== "running" || userNavigatedRef.current) return;
+    if (state.activeLayer) {
+      const tab = LAYER_TO_TAB[state.activeLayer];
+      if (tab) setActiveTab(tab);
     }
+  }, [state.activeLayer, state.status]);
+
+  // Reset user navigation flag when pipeline starts
+  useEffect(() => {
+    if (state.status === "running") {
+      userNavigatedRef.current = false;
+    }
+  }, [state.status]);
+
+  const handleTabChange = useCallback((tab: string) => {
+    userNavigatedRef.current = true;
+    setActiveTab(tab);
+  }, []);
+
+  const handleRun = useCallback(() => {
+    reset();
+    setActiveTab("requirements");
+    run(selectedIngredient);
+  }, [selectedIngredient, run, reset]);
+
+  const handlePreviewPdf = useCallback((url: string, evidenceId: string) => {
+    setPdfPreview({ url, evidenceId });
+  }, []);
+
+  // Tab completion indicators
+  const tabStatus = (tab: string): "idle" | "active" | "done" => {
+    if (state.status === "idle") return "idle";
+    const layerForTab: Record<string, string> = {
+      requirements: "L1",
+      suppliers: "L2",
+      verification: "L3",
+      ranking: "RANK",
+    };
+    const layer = layerForTab[tab];
+
+    // Check if this layer's data is populated
+    const hasData: Record<string, boolean> = {
+      requirements: state.requirements.length > 0,
+      suppliers: state.suppliers.length > 0,
+      verification: state.verification !== null,
+      ranking: state.ranking.length > 0,
+    };
+
+    if (hasData[tab]) return "done";
+    if (state.activeLayer === layer) return "active";
+    return "idle";
   };
 
   const handleExportBOM = () => {
@@ -160,347 +120,125 @@ export default function SelectionPage() {
   const primaryComponent = bomComponents[0] || null;
 
   return (
-    <div className="max-w-7xl mx-auto">
-      {/* Toast Notification */}
-      {toastMsg && (
-        <div className="fixed bottom-4 right-4 bg-tertiary-container text-on-tertiary-container px-6 py-3 rounded-lg shadow-2xl border border-tertiary/20 font-bold text-sm z-50 flex items-center gap-2">
-          <span className="material-symbols-outlined text-tertiary fill-icon">info</span>
-          {toastMsg}
-        </div>
-      )}
-
-      {/* Breadcrumb + Title */}
-      <div className="mb-10">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[0.7rem] font-bold tracking-widest uppercase text-on-surface-variant">
-            Enterprise Procurement
-          </span>
-          <span className="text-outline-variant">/</span>
-          <span className="text-[0.7rem] font-bold tracking-widest uppercase text-primary">
-            Agnes Sport Protein Co
-          </span>
-          {productsStatus === "done" && (
-            <>
-              <span className="text-outline-variant">/</span>
-              <span className="text-[0.65rem] font-bold px-2 py-0.5 bg-tertiary-container/30 text-tertiary rounded-full">
-                Live DB
-              </span>
-            </>
-          )}
-        </div>
-        <h1 className="text-4xl font-extrabold tracking-tight text-on-surface">
-          Product &amp; BOM Selection
-        </h1>
-        <p className="text-on-surface-variant mt-2 text-sm">
-          Select a product and identify which BOM component to find a substitute
-          for. Data sourced live from the Agnes supplier catalog.
-        </p>
-      </div>
-
-      {/* Main Grid */}
-      <div className="grid grid-cols-12 gap-8 items-start">
-        {/* Product Column */}
-        <div className="col-span-12 lg:col-span-4 space-y-4">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-sm font-bold text-on-surface uppercase tracking-wider">
-              Active Portfolio
-            </h2>
-            {productsStatus === "done" && (
-              <span className="text-[0.7rem] font-bold text-tertiary px-2 py-0.5 bg-tertiary-container/20 rounded">
-                {products.length} Products
-              </span>
-            )}
-            {productsStatus === "loading" && (
-              <span className="text-[0.7rem] font-bold text-outline px-2 py-0.5 bg-surface-container rounded">
-                Loading DB...
-              </span>
-            )}
-          </div>
-
-          <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
-            {productsStatus === "loading" &&
-              [...Array(6)].map((_, i) => (
-                <div
-                  key={i}
-                  className="p-4 bg-white rounded-xl border border-surface-container animate-pulse flex items-center gap-3"
-                >
-                  <div className="w-10 h-10 rounded-lg bg-surface-container" />
-                  <div className="flex-1">
-                    <div className="h-3 bg-surface-container rounded w-28 mb-2" />
-                    <div className="h-2 bg-surface-container rounded w-20" />
-                  </div>
-                </div>
-              ))}
-
-            {productsStatus === "done" &&
-              products.map((p) => {
-                const isSelected = p.SKU === selectedSku;
-                return (
-                  <div
-                    key={p.SKU}
-                    onClick={() => setSelectedSku(p.SKU)}
-                    className={`p-4 bg-white rounded-xl flex items-center justify-between cursor-pointer transition-all ${
-                      isSelected
-                        ? "border-2 border-primary shadow-sm"
-                        : "border border-surface-container hover:border-outline-variant/30"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          isSelected ? "bg-primary/5" : "bg-surface-container"
-                        }`}
-                      >
-                        <span
-                          className={`material-symbols-outlined ${
-                            isSelected ? "text-primary" : "text-outline-variant"
-                          }`}
-                          style={
-                            isSelected
-                              ? { fontVariationSettings: "'FILL' 1" }
-                              : {}
-                          }
-                        >
-                          {iconForCompany(p.company)}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-on-surface leading-none mb-1">
-                          {p.company}
-                        </p>
-                        <p className="text-[0.65rem] text-on-surface-variant font-medium uppercase tracking-tighter">
-                          SKU: {p.SKU.split("-").slice(-1)[0]}
-                        </p>
-                      </div>
-                    </div>
-                    {isSelected && (
-                      <span className="material-symbols-outlined text-primary text-xl fill-icon">
-                        check_circle
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+    <div className="flex h-[calc(100vh-72px)]">
+      {/* Main content */}
+      <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+        {/* Header controls */}
+        <div className="flex items-center gap-4 px-6 py-4 border-b border-border/50 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-muted-foreground">Ingredient:</label>
+            <select
+              value={selectedIngredient}
+              onChange={(e) => setSelectedIngredient(e.target.value)}
+              disabled={state.status === "running"}
+              className="bg-white text-[#1B263B] border border-[#E2E4E9] rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B263B]/20 min-w-[200px] cursor-pointer"
+            >
+              {ingredients.length > 0
+                ? ingredients.map((ing) => (
+                    <option key={ing} value={ing}>
+                      {ing.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                    </option>
+                  ))
+                : (
+                    <option value="niacinamide">Niacinamide</option>
+                  )
+              }
+            </select>
           </div>
 
           <button
-            onClick={() => showToast("SKU Import feature is under development.")}
-            className="w-full mt-4 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-outline-variant/30 rounded-xl text-on-surface-variant text-sm font-medium hover:bg-surface-container-low transition-colors"
+            onClick={handleRun}
+            disabled={state.status === "running"}
+            className="inline-flex items-center gap-2 bg-[#1B263B] text-white rounded-md px-4 py-1.5 text-sm font-semibold hover:bg-[#2D3A4F] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
-            <span className="material-symbols-outlined text-[20px]">add</span>
-            Import New SKU
+            {state.status === "running" ? (
+              <>
+                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Running Pipeline...
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                Run Pipeline
+              </>
+            )}
           </button>
-        </div>
 
-        {/* BOM Module */}
-        <div className="col-span-12 lg:col-span-8">
-          <div className="bg-white rounded-2xl border border-surface-container shadow-sm overflow-hidden">
-            {/* BOM Header */}
-            <div className="p-6 border-b border-surface-container flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-on-surface">
-                    Bill of Materials (BOM)
-                  </h2>
-                  <span className="text-[0.6rem] font-bold px-2 py-0.5 bg-primary/5 text-primary rounded-full border border-primary/10">
-                    LIVE DB
-                  </span>
-                </div>
-                <p className="text-xs text-on-surface-variant font-medium mt-0.5">
-                  {selectedProduct
-                    ? `${selectedProduct.company} · ${selectedProduct.SKU}`
-                    : "Select a product"}
-                </p>
-              </div>
-              {primaryComponent && (
-                <div className="text-right">
-                  <p className="text-[0.6rem] font-bold text-on-surface-variant uppercase tracking-widest mb-0.5">
-                    Target for Substitution
-                  </p>
-                  <p className="text-sm font-bold text-primary flex items-center gap-1 justify-end">
-                    {selectedIngredient
-                      ? selectedIngredient.name
-                      : primaryComponent.name}
-                    <span className="material-symbols-outlined text-[16px]">
-                      info
-                    </span>
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
-              <table className="w-full text-left">
-                <thead className="sticky top-0 z-10">
-                  <tr className="bg-surface-container-lowest">
-                    <th className="px-6 py-4 text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant">
-                      Component Name
-                    </th>
-                    <th className="px-6 py-4 text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant">
-                      Company
-                    </th>
-                    <th className="px-6 py-4 text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant">
-                      Suppliers
-                    </th>
-                    <th className="px-6 py-4 text-right" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-container">
-                  {bomStatus === "loading" &&
-                    [...Array(5)].map((_, i) => (
-                      <tr key={i}>
-                        <td className="px-6 py-5" colSpan={4}>
-                          <div className="animate-pulse flex gap-3">
-                            <div className="w-2 h-2 rounded-full bg-surface-container mt-2" />
-                            <div className="flex-1">
-                              <div className="h-3 bg-surface-container rounded w-40 mb-1.5" />
-                              <div className="h-2 bg-surface-container rounded w-24" />
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-
-                  {bomStatus === "done" &&
-                    bomComponents.map((row, idx) => {
-                      const isPrimary = idx === 0;
-                      const isSelected =
-                        selectedIngredient?.rm_sku === row.rm_sku;
-                      return (
-                        <tr
-                          key={row.rm_sku}
-                          className={
-                            isPrimary
-                              ? "bg-primary/5"
-                              : isSelected
-                              ? "bg-secondary-container/20"
-                              : "hover:bg-surface-container-lowest transition-colors"
-                          }
-                        >
-                          <td className="px-6 py-5">
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                  isPrimary
-                                    ? "bg-primary animate-pulse"
-                                    : "bg-outline-variant/30"
-                                }`}
-                              />
-                              <div>
-                                <p
-                                  className={`text-sm leading-tight ${
-                                    isPrimary
-                                      ? "font-bold text-on-surface"
-                                      : "font-medium text-on-surface"
-                                  }`}
-                                >
-                                  {row.name}
-                                </p>
-                                <p className="text-[0.65rem] text-on-surface-variant font-mono mt-0.5 truncate max-w-[200px]">
-                                  {row.rm_sku}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5 text-sm text-on-surface">
-                            {row.rm_company}
-                          </td>
-                          <td className="px-6 py-5">
-                            <span
-                              className={`text-xs font-bold px-2 py-1 rounded-full ${
-                                row.supplier_count > 0
-                                  ? "bg-tertiary-container text-on-tertiary-container"
-                                  : "bg-surface-container text-on-surface-variant"
-                              }`}
-                            >
-                              {row.supplier_count > 0
-                                ? `${row.supplier_count} supplier${row.supplier_count > 1 ? "s" : ""}`
-                                : "No supplier"}
-                            </span>
-                          </td>
-                          <td className="px-6 py-5 text-right">
-                            <button
-                              onClick={() => {
-                                setSelectedIngredient(row);
-                                startAnalysis(row, selectedProduct);
-                              }}
-                              className={`px-4 py-2 rounded-lg text-xs font-bold shadow-sm hover:opacity-90 transition-all flex items-center gap-2 ml-auto ${
-                                isPrimary || isSelected
-                                  ? "primary-gradient text-on-primary"
-                                  : "bg-surface-container text-on-surface hover:bg-surface-container-high"
-                              }`}
-                            >
-                              <span className="material-symbols-outlined text-[16px]">
-                                swap_horiz
-                              </span>
-                              Find Substitute
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* BOM Footer */}
-            <div className="p-6 bg-surface-container-lowest border-t border-surface-container flex justify-between items-center">
-              <p className="text-[0.7rem] text-on-surface-variant font-medium flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[14px] text-tertiary">
-                  database
-                </span>
-                {bomStatus === "done"
-                  ? `${bomComponents.length} components · Agnes Catalog DB`
-                  : "Loading from database..."}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleExportBOM}
-                  disabled={bomStatus !== "done"}
-                  className="px-4 py-1.5 text-xs font-bold text-on-surface border border-outline-variant/30 rounded-md hover:bg-surface-container-low transition-all disabled:opacity-40"
-                >
-                  Export BOM
-                </button>
-                <button
-                  onClick={() =>
-                    showToast("Historical Pricing data not currently available.")
-                  }
-                  className="px-4 py-1.5 text-xs font-bold text-on-surface border border-outline-variant/30 rounded-md hover:bg-surface-container-low transition-all"
-                >
-                  Historical Pricing
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Intelligence insight */}
-          {bomStatus === "done" && primaryComponent && (
-            <div className="mt-4 p-4 bg-error-container/10 border border-error/20 rounded-xl flex items-start gap-3">
-              <span className="material-symbols-outlined text-error text-xl mt-0.5 fill-icon">
-                warning
-              </span>
-              <div>
-                <p className="text-sm font-bold text-on-surface">
-                  Supply Risk Detected
-                </p>
-                <p className="text-xs text-on-surface-variant mt-0.5">
-                  <strong>{primaryComponent.name}</strong> is the primary
-                  component for {selectedProduct?.company}. Click{" "}
-                  <button
-                    onClick={() => startAnalysis(primaryComponent, selectedProduct)}
-                    className="text-primary font-bold underline decoration-primary/40 hover:decoration-primary"
-                  >
-                    Find Substitute
-                  </button>{" "}
-                  to run the Agnes AI pipeline and discover validated
-                  alternatives.
-                </p>
-              </div>
-            </div>
+          {state.status === "done" && (
+            <span className="text-xs text-green-600 font-medium">Pipeline complete</span>
+          )}
+          {state.status === "error" && (
+            <span className="text-xs text-red-600 font-medium">Error: {state.error}</span>
           )}
         </div>
+
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col overflow-hidden">
+          <TabsList className="bg-transparent border-b border-border/50 rounded-none h-auto p-0 px-6 flex-shrink-0">
+            {TAB_ORDER.map((tab) => {
+              const labels: Record<string, string> = {
+                requirements: "1. Requirements",
+                suppliers: "2. Suppliers",
+                verification: "3. Verification",
+                ranking: "4. Ranking",
+              };
+              const status = tabStatus(tab);
+              return (
+                <TabsTrigger
+                  key={tab}
+                  value={tab}
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#1B263B] data-[state=active]:bg-transparent data-[state=active]:text-foreground text-muted-foreground px-4 py-2.5 text-sm"
+                >
+                  <span className="flex items-center gap-1.5">
+                    {status === "done" && <span className="text-green-600 text-xs">{"\u2713"}</span>}
+                    {status === "active" && (
+                      <span className="w-2 h-2 rounded-full bg-[#4DA8DA] animate-pulse" />
+                    )}
+                    {labels[tab]}
+                  </span>
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+
+          <div className="flex-1 overflow-auto p-6">
+            <TabsContent value="requirements" className="mt-0">
+              <RequirementsTab requirements={state.requirements} />
+            </TabsContent>
+            <TabsContent value="suppliers" className="mt-0">
+              <SuppliersTab suppliers={state.suppliers} />
+            </TabsContent>
+            <TabsContent value="verification" className="mt-0">
+              <VerificationTab
+                verification={state.verification}
+                supplierNames={state.supplierNames}
+                onPreviewPdf={handlePreviewPdf}
+              />
+            </TabsContent>
+            <TabsContent value="ranking" className="mt-0">
+              <RankingTab ranking={state.ranking} />
+            </TabsContent>
+          </div>
+        </Tabs>
       </div>
+
+      {/* Agent trace sidebar */}
+      <AgentTrace
+        milestones={state.milestones}
+        liveTraces={state.liveTraces}
+        isRunning={state.status === "running"}
+        collapsed={traceCollapsed}
+        onToggle={() => setTraceCollapsed(!traceCollapsed)}
+      />
+
+      {/* Source viewer modal */}
+      <SourceViewer
+        url={pdfPreview?.url ?? null}
+        evidenceId={pdfPreview?.evidenceId ?? null}
+        onClose={() => setPdfPreview(null)}
+      />
     </div>
   );
 }

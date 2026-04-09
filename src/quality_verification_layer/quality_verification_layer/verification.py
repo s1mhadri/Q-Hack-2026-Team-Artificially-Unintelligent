@@ -18,24 +18,45 @@ from .schemas import (
 def _parse_numeric_or_range(value: str) -> Tuple[Optional[float], Optional[float]]:
     """Parse a value that may be a single number or a range.
 
+    Handles: "99.5", "99.0-100.5", "NMT 10", "not more than 20",
+    "< 0.5", "<= 10", ">= 99", "≤ 10 ppm", etc.
+
     Returns (lo, hi). For a single value both are the same.
     Returns (None, None) if unparseable.
     """
     v = value.strip()
-    v = re.sub(r"[%\s]", "", v)
 
-    for sep in ("–", "—", "−", "-", "~", " to "):
+    # Handle "None" string from Gemini
+    if v.lower() in ("none", "n/a", "not available", "not tested", ""):
+        return (None, None)
+
+    # Handle text prefixes: "not more than", "NMT", "NLT", "less than", "at least"
+    v_lower = v.lower()
+    for prefix in ("not more than", "nmt", "no more than", "less than", "max", "maximum"):
+        if v_lower.startswith(prefix):
+            v = v[len(prefix):].strip()
+            break
+    for prefix in ("not less than", "nlt", "at least", "min", "minimum"):
+        if v_lower.startswith(prefix):
+            v = v[len(prefix):].strip()
+            break
+
+    # Strip units (but keep spaces for now to preserve structure)
+    v = re.sub(r"(ppm|ppb|mg/kg|cfu/g|mg|µg|mesh|degrees|months|%)", "", v, flags=re.I).strip()
+    v = re.sub(r"\s+", " ", v).strip()
+
+    for sep in ("–", "—", "−", "-", "~", "to"):
         if sep in v:
             parts = v.split(sep, 1)
             try:
-                lo = float(parts[0].strip().lstrip("<>≤≥~ "))
-                hi = float(parts[1].strip().lstrip("<>≤≥~ "))
+                lo = float(parts[0].strip().lstrip("<>≤≥~= "))
+                hi = float(parts[1].strip().lstrip("<>≤≥~= "))
                 return (lo, hi)
             except (ValueError, IndexError):
                 continue
 
     try:
-        cleaned = v.lstrip("<>≤≥~ ")
+        cleaned = v.lstrip("<>≤≥~= ")
         n = float(cleaned)
         return (n, n)
     except (ValueError, TypeError):
@@ -110,11 +131,17 @@ def verify_requirements(
     attributes: List[ExtractedAttribute],
     requirements: List[RequirementInput],
     id_gen: QualityIdGenerator,
+    ingredient_name: str = "",
 ) -> List[VerificationResultItem]:
     """Compare extracted attributes against requirements.
 
+    Normalizes both requirement field names and attribute field names
+    to canonical form before matching.
+
     Returns a list of VerificationResultItem — one per requirement.
     """
+    from .normalization import normalize_field_name
+
     # Build field_name -> best attribute lookup
     attr_by_field: Dict[str, ExtractedAttribute] = {}
     for attr in attributes:
@@ -133,7 +160,19 @@ def verify_requirements(
     results: List[VerificationResultItem] = []
 
     for req in requirements:
-        attr = attr_by_field.get(req.field_name)
+        # Try exact match first, then normalized match
+        req_field = req.field_name
+        attr = attr_by_field.get(req_field)
+        if attr is None:
+            # Normalize requirement field name and retry
+            normalized_req = normalize_field_name(req_field, ingredient_name)
+            attr = attr_by_field.get(normalized_req)
+            if attr is None and normalized_req != req_field:
+                # Also try: maybe extracted field matches the raw req name
+                for fname, a in attr_by_field.items():
+                    if normalize_field_name(fname, ingredient_name) == normalized_req:
+                        attr = a
+                        break
 
         if attr is None:
             results.append(VerificationResultItem(
@@ -150,13 +189,11 @@ def verify_requirements(
         actual_str = str(attr.value)
         status, reason = _evaluate_requirement(req, actual_str)
 
-        # Downgrade to fail if source confidence is low
+        # Note low confidence but don't downgrade the verdict — the value still meets the requirement
         attr_conf = attr.confidence if isinstance(attr.confidence, str) else attr.confidence.value
         if attr_conf == "low" and status == VerificationStatus.pass_:
-            status = VerificationStatus.partial
-            reason = f"{reason} (downgraded: low source confidence)"
+            reason = f"{reason} (note: low source confidence)"
 
-        # Determine verification confidence from attribute confidence
         ver_confidence = Confidence(attr_conf) if attr_conf in ("high", "medium", "low") else Confidence.medium
 
         evidence_ids = [attr.source_evidence_id] if attr.source_evidence_id else []
