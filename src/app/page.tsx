@@ -1,560 +1,273 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-type StepStatus = "idle" | "running" | "complete" | "error";
+const PRODUCTS = [
+  { id: "PRO-G-992", name: "Gold Standard Whey", icon: "fitness_center", selected: true },
+  { id: "PRO-C-104", name: "Casein Elite Complex", icon: "egg_alt", selected: false },
+  { id: "PRO-P-552", name: "Plant Base Isolate", icon: "eco", selected: false },
+];
 
-interface StepState {
-  status: StepStatus;
-  data: any;
-  duration?: number;
-  logs: string[];
-}
-
-const LAYERS = [
+const BOM = [
   {
-    id: "layer1",
-    num: 1,
-    title: "Requirements Extraction",
-    desc: "LLM agent identifies hard constraints and regulatory specs via Google Search Grounding",
-    endpoint: (ing: string) => `/api/py/layer1?ingredient=${encodeURIComponent(ing)}`,
+    name: "Whey Protein Isolate (WPI)",
+    grade: "Grade 90% Pure · Raw Material",
+    qty: "250,000 kg",
+    lead: "12 Weeks",
+    leadRisk: true,
+    cost: "$14.20/kg",
+    primary: true,
   },
   {
-    id: "layer2",
-    num: 2,
-    title: "Supplier Discovery",
-    desc: "Agentic search pipeline finds functional substitutes from market data and supplier catalogs",
-    endpoint: (ing: string) => `/api/py/layer2?ingredient=${encodeURIComponent(ing)}`,
+    name: "Natural Sweetener (Stevia)",
+    grade: "Extract Powder · Additive",
+    qty: "4,500 kg",
+    lead: "4 Weeks",
+    leadRisk: false,
+    cost: "$42.50/kg",
+    primary: false,
   },
   {
-    id: "layer3",
-    num: 3,
-    title: "Quality Verification",
-    desc: "Extracts and compares compliance fields from TDS and Certificates of Analysis",
-    endpoint: () => `/api/py/layer3`,
+    name: "Cocoa Powder (Alkalized)",
+    grade: "Dutch Processed · Flavoring",
+    qty: "12,000 kg",
+    lead: "6 Weeks",
+    leadRisk: false,
+    cost: "$8.15/kg",
+    primary: false,
   },
   {
-    id: "layer4",
-    num: 4,
-    title: "Consensus & Decision",
-    desc: "Aggregates cost, compliance, and supply-chain tradeoffs into a sourcing recommendation",
-    endpoint: () => `/api/py/layer4`,
+    name: "Packaging - 2lb Tub",
+    grade: "BPA-Free Matte Black · Containment",
+    qty: "50,000 units",
+    lead: "3 Weeks",
+    leadRisk: false,
+    cost: "$1.12/unit",
+    primary: false,
   },
 ];
 
-// ─── Layer Result Renderers ───────────────────────────────────────────────────
-function Layer1Results({ data }: { data: any }) {
-  if (!data || data.error) {
-    return (
-      <div style={{ padding: "1rem 1.5rem", color: "var(--error)", fontSize: "0.85rem" }}>
-        {data?.detail || data?.error || "Unknown error"}
-      </div>
-    );
-  }
+export default function SelectionPage() {
+  const router = useRouter();
 
-  const reqs: any[] = data.requirements || [];
+  const startAnalysis = (ingredient: string) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("agnes_ingredient", ingredient);
+      localStorage.setItem("agnes_layer1", "");
+      localStorage.setItem("agnes_layer2", "");
+      localStorage.setItem("agnes_layer3", "");
+      localStorage.setItem("agnes_layer4", "");
+    }
+    router.push("/requirements");
+  };
 
   return (
-    <div className="results-area">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
-        <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-          Found <strong style={{ color: "var(--text-primary)" }}>{reqs.length}</strong> quality requirements
-          {data.ingredient_id && <> for <strong style={{ color: "var(--accent-secondary)" }}>{data.ingredient_id}</strong></>}
+    <div className="max-w-7xl mx-auto">
+      {/* Breadcrumb + Title */}
+      <div className="mb-10">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[0.7rem] font-bold tracking-widest uppercase text-on-surface-variant">
+            Enterprise Procurement
+          </span>
+          <span className="text-outline-variant">/</span>
+          <span className="text-[0.7rem] font-bold tracking-widest uppercase text-primary">
+            Agnes Sport Protein Co
+          </span>
         </div>
-      </div>
-      <div className="requirements-grid">
-        {reqs.map((r: any, i: number) => (
-          <div key={i} className="req-card">
-            <div className="req-field">{r.field_name || "Requirement"}</div>
-            <div className="req-value">
-              {r.operator && <span style={{ color: "var(--text-tertiary)", fontWeight: 400, marginRight: 4 }}>{r.operator}</span>}
-              {r.value !== undefined ? String(r.value) : "—"}
-            </div>
-            {r.unit && <div className="req-unit">{r.unit}</div>}
-            {r.priority && (
-              <div className={`priority-badge ${r.priority}`}>{r.priority.toUpperCase()}</div>
-            )}
-            {r.source && (
-              <div style={{ marginTop: "0.5rem", fontSize: "0.7rem", color: "var(--text-tertiary)" }}>
-                📄 {r.source}
-              </div>
-            )}
-          </div>
-        ))}
-        {reqs.length === 0 && (
-          <div style={{ gridColumn: "1 / -1", color: "var(--text-tertiary)", fontSize: "0.85rem" }}>
-            No requirements extracted.
-          </div>
-        )}
-      </div>
-      {data.notes && (
-        <div style={{ marginTop: "1rem", fontSize: "0.78rem", color: "var(--text-tertiary)", fontStyle: "italic" }}>
-          {data.notes}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Layer2Results({ data }: { data: any }) {
-  if (!data || data.error) {
-    return (
-      <div style={{ padding: "1rem 1.5rem", color: "var(--error)", fontSize: "0.85rem" }}>
-        {data?.detail || data?.error || "Unknown error"}
-      </div>
-    );
-  }
-
-  const candidates: any[] = data.candidates || data.suppliers || [];
-
-  if (candidates.length === 0) {
-    return (
-      <div className="results-area">
-        <p style={{ color: "var(--text-tertiary)", fontSize: "0.85rem" }}>
-          No suppliers discovered. Raw: {JSON.stringify(data).substring(0, 200)}
+        <h1 className="text-4xl font-extrabold tracking-tight text-on-surface">
+          Product &amp; BOM Selection
+        </h1>
+        <p className="text-on-surface-variant mt-2 text-sm">
+          Select a product and identify which BOM component to find a substitute for.
         </p>
       </div>
-    );
-  }
 
-  return (
-    <div className="results-area">
-      <div style={{ marginBottom: "0.75rem", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-        Discovered <strong style={{ color: "var(--text-primary)" }}>{candidates.length}</strong> candidate suppliers
-      </div>
-      {candidates.map((s: any, i: number) => (
-        <div key={i} className="supplier-card">
-          <div className="supplier-rank">#{i + 1}</div>
-          <div style={{ flex: 1 }}>
-            <div className="supplier-name">{s.name || s.supplier_name || `Supplier ${i + 1}`}</div>
-            <div className="supplier-meta">
-              {[s.region, s.grade, s.certifications].filter(Boolean).join(" · ") || s.source || ""}
-            </div>
+      {/* Main Grid */}
+      <div className="grid grid-cols-12 gap-8 items-start">
+        {/* Product Column */}
+        <div className="col-span-12 lg:col-span-4 space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-sm font-bold text-on-surface uppercase tracking-wider">Active Portfolio</h2>
+            <span className="text-[0.7rem] font-bold text-tertiary px-2 py-0.5 bg-tertiary-container/20 rounded">
+              32 Active SKUs
+            </span>
           </div>
-          {s.score !== undefined && (
-            <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--accent-secondary)" }}>
-              {(s.score * 100).toFixed(0)}%
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
 
-function Layer3Results({ data }: { data: any }) {
-  if (!data) return null;
-  const verifications: any[] = data.verifications || [];
-
-  return (
-    <div className="results-area">
-      {verifications.map((v: any, i: number) => (
-        <div key={i} className="verification-row">
-          <div>
-            <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{v.supplier}</div>
-            <div style={{ fontSize: "0.78rem", color: "var(--text-tertiary)", marginTop: 2 }}>
-              Assay: {v.assay_extracted} · Confidence: {(v.confidence * 100).toFixed(0)}%
-            </div>
-          </div>
-          <div className={`pass-pill ${v.pass ? "pass" : "fail"}`}>
-            {v.pass ? "✓ PASS" : "✗ FAIL"}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Layer4Results({ data }: { data: any }) {
-  if (!data) return null;
-
-  return (
-    <div className="results-area">
-      <div className="recommendation-box">
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem" }}>
-          <div>
-            <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.8px", color: "var(--success)", fontWeight: 700, marginBottom: 6 }}>
-              Final Recommendation
-            </div>
-            <div style={{ fontSize: "1.35rem", fontWeight: 800, letterSpacing: "-0.5px" }}>
-              {data.recommendation?.toUpperCase() || "N/A"}
-            </div>
-          </div>
-          {data.target_supplier && (
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", marginBottom: 4 }}>Selected Supplier</div>
-              <div style={{ fontWeight: 700, color: "var(--accent-secondary)" }}>{data.target_supplier}</div>
-            </div>
-          )}
-        </div>
-
-        {data.explanation && (
-          <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: "1rem" }}>
-            {data.explanation}
-          </p>
-        )}
-
-        {data.confidence !== undefined && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>Confidence</span>
-              <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--success)" }}>
-                {(data.confidence * 100).toFixed(0)}%
-              </span>
-            </div>
-            <div className="confidence-bar-track">
-              <div className="confidence-bar-fill" style={{ width: `${(data.confidence * 100).toFixed(0)}%` }} />
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Step component ───────────────────────────────────────────────────────────
-function PipelineStep({
-  layer,
-  step,
-  isExpanded,
-  onToggle,
-  onRun,
-  isAnyRunning,
-  ingredient,
-}: {
-  layer: typeof LAYERS[0];
-  step: StepState;
-  isExpanded: boolean;
-  onToggle: () => void;
-  onRun: () => void;
-  isAnyRunning: boolean;
-  ingredient: string;
-}) {
-  const statusClass =
-    step.status === "running" ? "running" :
-    step.status === "complete" ? "complete" :
-    step.status === "error" ? "error-state" : "";
-
-  const badgeLabel =
-    step.status === "running" ? "Running..." :
-    step.status === "complete" ? `Done${step.duration ? ` · ${step.duration}s` : ""}` :
-    step.status === "error" ? "Error" : "Idle";
-
-  return (
-    <div className={`pipeline-step ${statusClass} animate-in`}>
-      {/* Header */}
-      <div className="step-header" onClick={onToggle} id={`step-header-${layer.id}`}>
-        <div className="step-number">
-          {step.status === "running" ? (
-            <div className="spinner" style={{ width: 14, height: 14, borderWidth: "1.5px" }} />
-          ) : step.status === "complete" ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          ) : step.status === "error" ? (
-            <span style={{ fontSize: "0.9rem" }}>!</span>
-          ) : (
-            layer.num
-          )}
-        </div>
-
-        <div className="step-info">
-          <div className="step-title">{layer.title}</div>
-          <div className="step-desc">{layer.desc}</div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
-          <span className={`step-badge ${step.status === "error" ? "error" : step.status}`}>{badgeLabel}</span>
-          {step.status === "idle" && (
-            <button
-              className="btn-primary"
-              style={{ padding: "6px 14px", fontSize: "0.8rem" }}
-              onClick={(e) => { e.stopPropagation(); onRun(); }}
-              disabled={isAnyRunning}
-              id={`run-${layer.id}-btn`}
-            >
-              Run
-            </button>
-          )}
-          {step.status !== "idle" && (
-            <svg className={`step-chevron ${isExpanded ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          )}
-        </div>
-      </div>
-
-      {/* Body */}
-      {isExpanded && step.status !== "idle" && (
-        <div className="step-body">
-          {/* Agent log */}
-          {step.logs.length > 0 && (
-            <div className="agent-log" id={`log-${layer.id}`}>
-              {step.logs.map((log, i) => {
-                const isOk = log.includes("✓") || log.includes("complete");
-                const isErr = log.includes("✗") || log.includes("error");
-                const isInfo = log.includes("→") || log.includes("Querying");
-                return (
-                  <div key={i} className="log-line">
-                    <span className="log-time">{new Date().toTimeString().slice(0, 8)}</span>
-                    <span className={`log-text ${isOk ? "ok" : isErr ? "error" : isInfo ? "info" : ""}`}>{log}</span>
+          <div className="space-y-2">
+            {PRODUCTS.map((p) => (
+              <div
+                key={p.id}
+                className={`p-4 bg-white rounded-xl flex items-center justify-between cursor-pointer transition-all ${
+                  p.selected
+                    ? "border-2 border-primary shadow-sm"
+                    : "border border-surface-container hover:border-outline-variant/30 group"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                      p.selected ? "bg-primary/5" : "bg-surface-container"
+                    }`}
+                  >
+                    <span
+                      className={`material-symbols-outlined ${p.selected ? "text-primary" : "text-outline-variant"}`}
+                      style={p.selected ? { fontVariationSettings: "'FILL' 1" } : {}}
+                    >
+                      {p.icon}
+                    </span>
                   </div>
-                );
-              })}
-              {step.status === "running" && <span style={{ color: "var(--accent-primary)" }}>▊</span>}
-            </div>
-          )}
-
-          {/* Results */}
-          {step.status === "complete" && step.data && (
-            layer.id === "layer1" ? <Layer1Results data={step.data} /> :
-            layer.id === "layer2" ? <Layer2Results data={step.data} /> :
-            layer.id === "layer3" ? <Layer3Results data={step.data} /> :
-            <Layer4Results data={step.data} />
-          )}
-          {step.status === "error" && (
-            <div style={{ padding: "1rem 1.5rem", color: "var(--error)", fontSize: "0.85rem" }}>
-              {step.data?.detail || step.data?.error || "Request failed."}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-export default function WorkspacePage() {
-  const [ingredient, setIngredient] = useState("Ascorbic Acid");
-  const [steps, setSteps] = useState<Record<string, StepState>>({
-    layer1: { status: "idle", data: null, logs: [] },
-    layer2: { status: "idle", data: null, logs: [] },
-    layer3: { status: "idle", data: null, logs: [] },
-    layer4: { status: "idle", data: null, logs: [] },
-  });
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    layer1: true, layer2: true, layer3: true, layer4: true,
-  });
-
-  const isAnyRunning = Object.values(steps).some((s) => s.status === "running");
-
-  const appendLog = (id: string, msg: string) => {
-    setSteps((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], logs: [...prev[id].logs, msg] },
-    }));
-  };
-
-  const runLayer = async (layerId: string, urlFn: (ing: string) => string) => {
-    const url = urlFn(ingredient);
-
-    setSteps((prev) => ({
-      ...prev,
-      [layerId]: { status: "running", data: null, logs: [] },
-    }));
-    setExpanded((prev) => ({ ...prev, [layerId]: true }));
-
-    const start = Date.now();
-
-    setTimeout(() => appendLog(layerId, `→ Initializing agent pipeline for "${ingredient}"...`), 100);
-    setTimeout(() => appendLog(layerId, `→ Querying backend: ${url}`), 400);
-
-    try {
-      const res = await fetch(url);
-      const text = await res.text();
-      let data: any;
-      try { data = JSON.parse(text); } catch { data = { error: "Non-JSON response", detail: text.substring(0, 300) }; }
-
-      const duration = ((Date.now() - start) / 1000).toFixed(1);
-
-      if (data.error) {
-        appendLog(layerId, `✗ Agent returned error: ${data.error}`);
-        setSteps((prev) => ({
-          ...prev,
-          [layerId]: { ...prev[layerId], status: "error", data, duration: parseFloat(duration) },
-        }));
-      } else {
-        const count =
-          data.requirements?.length ?? data.candidates?.length ?? data.verifications?.length;
-        appendLog(layerId, `✓ Complete in ${duration}s${count !== undefined ? ` · ${count} records` : ""}`);
-        setSteps((prev) => ({
-          ...prev,
-          [layerId]: { ...prev[layerId], status: "complete", data, duration: parseFloat(duration) },
-        }));
-      }
-    } catch (err: any) {
-      const duration = ((Date.now() - start) / 1000).toFixed(1);
-      appendLog(layerId, `✗ Network error: ${err.message}`);
-      setSteps((prev) => ({
-        ...prev,
-        [layerId]: { ...prev[layerId], status: "error", data: { error: err.message }, duration: parseFloat(duration) },
-      }));
-    }
-  };
-
-  const runAllSequential = async () => {
-    // Reset all
-    setSteps({
-      layer1: { status: "idle", data: null, logs: [] },
-      layer2: { status: "idle", data: null, logs: [] },
-      layer3: { status: "idle", data: null, logs: [] },
-      layer4: { status: "idle", data: null, logs: [] },
-    });
-    setExpanded({ layer1: true, layer2: true, layer3: true, layer4: true });
-
-    for (const layer of LAYERS) {
-      await runLayer(layer.id, layer.endpoint);
-      await new Promise((r) => setTimeout(r, 300));
-    }
-  };
-
-  const resetAll = () => {
-    setSteps({
-      layer1: { status: "idle", data: null, logs: [] },
-      layer2: { status: "idle", data: null, logs: [] },
-      layer3: { status: "idle", data: null, logs: [] },
-      layer4: { status: "idle", data: null, logs: [] },
-    });
-  };
-
-  const completedCount = Object.values(steps).filter((s) => s.status === "complete").length;
-  const errorCount = Object.values(steps).filter((s) => s.status === "error").length;
-
-  return (
-    <div className="animate-in">
-      {/* Page Header */}
-      <div className="page-header">
-        <h1 className="page-title">Ingredient Analysis</h1>
-        <p className="page-subtitle">
-          Run the 4-layer AI pipeline to identify functional substitutes, verify quality compliance, and generate a sourcing recommendation.
-        </p>
-      </div>
-
-      {/* Stats Row */}
-      {completedCount > 0 && (
-        <div className="stats-row fade-in">
-          <div className="stat-card">
-            <div className="stat-icon" style={{ background: "rgba(16,185,129,0.1)" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <div>
-              <div className="stat-label">Layers Complete</div>
-              <div className="stat-value">{completedCount}<span style={{ fontSize: "0.8rem", color: "var(--text-tertiary)", fontWeight: 400 }}>/4</span></div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon" style={{ background: "rgba(255,90,31,0.1)" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-secondary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-            </div>
-            <div>
-              <div className="stat-label">Requirements Found</div>
-              <div className="stat-value">{steps.layer1?.data?.requirements?.length ?? "—"}</div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon" style={{ background: "rgba(99,102,241,0.1)" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-            </div>
-            <div>
-              <div className="stat-label">Suppliers Discovered</div>
-              <div className="stat-value">{steps.layer2?.data?.candidates?.length ?? steps.layer2?.data?.suppliers?.length ?? "—"}</div>
-            </div>
-          </div>
-          {steps.layer4?.data?.recommendation && (
-            <div className="stat-card">
-              <div className="stat-icon" style={{ background: "var(--success-bg)" }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-              </div>
-              <div>
-                <div className="stat-label">Decision</div>
-                <div className="stat-value" style={{ color: "var(--success)", fontSize: "1rem" }}>
-                  {steps.layer4.data.recommendation}
+                  <div>
+                    <p className="text-sm font-bold text-on-surface leading-none mb-1">{p.name}</p>
+                    <p className="text-[0.65rem] text-on-surface-variant font-medium uppercase tracking-tighter">
+                      SKU: {p.id}
+                    </p>
+                  </div>
                 </div>
-                <div className="stat-sub">{steps.layer4.data.target_supplier}</div>
+                {p.selected && (
+                  <span className="material-symbols-outlined text-primary text-xl fill-icon">check_circle</span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <button className="w-full mt-4 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-outline-variant/30 rounded-xl text-on-surface-variant text-sm font-medium hover:bg-surface-container-low transition-colors">
+            <span className="material-symbols-outlined text-[20px]">add</span>
+            Import New SKU
+          </button>
+        </div>
+
+        {/* BOM Module */}
+        <div className="col-span-12 lg:col-span-8">
+          <div className="bg-white rounded-2xl border border-surface-container shadow-sm overflow-hidden">
+            {/* BOM Header */}
+            <div className="p-6 border-b border-surface-container flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-on-surface">Bill of Materials (BOM)</h2>
+                <p className="text-xs text-on-surface-variant font-medium mt-0.5">
+                  Gold Standard Whey • Batch ID: #B-8802
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[0.6rem] font-bold text-on-surface-variant uppercase tracking-widest mb-0.5">
+                  Target for Substitution
+                </p>
+                <p className="text-sm font-bold text-primary flex items-center gap-1 justify-end">
+                  Whey Protein Isolate (WPI)
+                  <span className="material-symbols-outlined text-[16px]">info</span>
+                </p>
               </div>
             </div>
-          )}
-        </div>
-      )}
 
-      {/* Input Card */}
-      <div className="analysis-input-card">
-        <div style={{ marginBottom: "0.875rem" }}>
-          <div className="section-label">Target Ingredient</div>
-          <p style={{ fontSize: "0.82rem", color: "var(--text-tertiary)" }}>
-            Enter the canonical ingredient name to analyze across all 4 agent layers.
-          </p>
-        </div>
-        <div className="input-row">
-          <div style={{ position: "relative", flex: 1 }}>
-            <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-tertiary)" }}
-              width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              id="ingredient-input"
-              className="input-field"
-              style={{ paddingLeft: "2.25rem" }}
-              value={ingredient}
-              onChange={(e) => setIngredient(e.target.value)}
-              placeholder="e.g. Ascorbic Acid, Citric Acid, Xanthan Gum..."
-              onKeyDown={(e) => e.key === "Enter" && !isAnyRunning && runAllSequential()}
-            />
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-surface-container-lowest">
+                    <th className="px-6 py-4 text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant">
+                      Component Name
+                    </th>
+                    <th className="px-6 py-4 text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant">
+                      Quantity
+                    </th>
+                    <th className="px-6 py-4 text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant">
+                      Lead Time
+                    </th>
+                    <th className="px-6 py-4 text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant">
+                      Unit Cost
+                    </th>
+                    <th className="px-6 py-4 text-right" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-container">
+                  {BOM.map((row) => (
+                    <tr
+                      key={row.name}
+                      className={row.primary ? "bg-primary/5" : "hover:bg-surface-container-lowest transition-colors"}
+                    >
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              row.primary ? "bg-primary animate-pulse" : "bg-outline-variant/30"
+                            }`}
+                          />
+                          <div>
+                            <p className={`text-sm leading-tight ${row.primary ? "font-bold text-on-surface" : "font-medium text-on-surface"}`}>
+                              {row.name}
+                            </p>
+                            <p className="text-[0.7rem] text-on-surface-variant mt-0.5">{row.grade}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className={`px-6 py-5 text-sm ${row.primary ? "font-semibold text-on-surface" : "text-on-surface"}`}>
+                        {row.qty}
+                      </td>
+                      <td className="px-6 py-5">
+                        {row.leadRisk ? (
+                          <span className="text-xs text-error font-bold flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[16px]">warning</span>
+                            {row.lead}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-on-surface">{row.lead}</span>
+                        )}
+                      </td>
+                      <td className={`px-6 py-5 text-sm ${row.primary ? "font-semibold text-on-surface" : "font-medium text-on-surface"}`}>
+                        {row.cost}
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                        {row.primary ? (
+                          <button
+                            onClick={() => startAnalysis("Whey Protein Isolate")}
+                            className="primary-gradient text-on-primary px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:opacity-90 transition-all flex items-center gap-2 ml-auto"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
+                            Find Substitute
+                          </button>
+                        ) : (
+                          <span className="material-symbols-outlined text-outline-variant cursor-pointer hover:text-on-surface">
+                            more_vert
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* BOM Footer */}
+            <div className="p-6 bg-surface-container-lowest border-t border-surface-container flex justify-between items-center">
+              <p className="text-[0.7rem] text-on-surface-variant font-medium">BOM Last Updated: Oct 24, 2023</p>
+              <div className="flex gap-2">
+                <button className="px-4 py-1.5 text-xs font-bold text-on-surface border border-outline-variant/30 rounded-md hover:bg-surface-container-low transition-all">
+                  Export BOM
+                </button>
+                <button className="px-4 py-1.5 text-xs font-bold text-on-surface border border-outline-variant/30 rounded-md hover:bg-surface-container-low transition-all">
+                  Historical Pricing
+                </button>
+              </div>
+            </div>
           </div>
-          <button
-            className="btn-primary"
-            style={{ padding: "10px 20px", fontSize: "0.9rem" }}
-            onClick={runAllSequential}
-            disabled={isAnyRunning || !ingredient.trim()}
-            id="run-all-btn"
-          >
-            {isAnyRunning ? (
-              <><div className="spinner" style={{ width: 14, height: 14, borderWidth: "1.5px" }} /> Running Pipeline...</>
-            ) : (
-              <>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-                Run Full Pipeline
-              </>
-            )}
-          </button>
-          {!isAnyRunning && completedCount > 0 && (
-            <button className="btn-ghost" onClick={resetAll} id="reset-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-6.5" />
-              </svg>
-              Reset
-            </button>
-          )}
-        </div>
-      </div>
 
-      {/* Pipeline */}
-      <div className="section-label">Agent Pipeline</div>
-      <div className="pipeline-wrapper">
-        {LAYERS.map((layer) => (
-          <PipelineStep
-            key={layer.id}
-            layer={layer}
-            step={steps[layer.id]}
-            isExpanded={expanded[layer.id]}
-            onToggle={() => setExpanded((p) => ({ ...p, [layer.id]: !p[layer.id] }))}
-            onRun={() => runLayer(layer.id, layer.endpoint)}
-            isAnyRunning={isAnyRunning}
-            ingredient={ingredient}
-          />
-        ))}
+          {/* Intelligence insight */}
+          <div className="mt-4 p-4 bg-error-container/10 border border-error/20 rounded-xl flex items-start gap-3">
+            <span className="material-symbols-outlined text-error text-xl mt-0.5 fill-icon">warning</span>
+            <div>
+              <p className="text-sm font-bold text-on-surface">Supply Risk Detected</p>
+              <p className="text-xs text-on-surface-variant mt-0.5">
+                WPI has a 12-week lead time and is sourced from a single Tier-1 supplier. Click{" "}
+                <button
+                  onClick={() => startAnalysis("Whey Protein Isolate")}
+                  className="text-primary font-bold underline decoration-primary/40 hover:decoration-primary"
+                >
+                  Find Substitute
+                </button>{" "}
+                to run the Agnes AI pipeline and discover validated alternatives.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
